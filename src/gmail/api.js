@@ -1,0 +1,155 @@
+import { gapi } from 'gapi-script';
+
+const DISCOVERY_DOCS = ['https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest'];
+
+// Initialize the gapi client that will use the access token provided by GSI
+export const initGmailApi = async () => {
+    return new Promise((resolve, reject) => {
+        gapi.load('client', async () => {
+            try {
+                await gapi.client.init({
+                    discoveryDocs: DISCOVERY_DOCS,
+                });
+                resolve();
+            } catch (error) {
+                console.error('Error initializing GAPI client', error);
+                reject(error);
+            }
+        });
+    });
+};
+
+export const setGmailToken = (token) => {
+    gapi.client.setToken({ access_token: token });
+};
+
+// Returns a batch of the 50 most recent inbox emails (metadata style)
+export const fetchInboxMessages = async (pageToken = '') => {
+    try {
+        const response = await gapi.client.gmail.users.messages.list({
+            userId: 'me',
+            q: 'in:inbox',
+            maxResults: 50,
+            pageToken: pageToken || undefined,
+        });
+
+        const messages = response.result.messages || [];
+        const nextPageToken = response.result.nextPageToken;
+
+        if (messages.length === 0) return { messages: [], nextPageToken };
+
+        // Fetch the metadata for each message
+        const batch = gapi.client.newBatch();
+        messages.forEach((msg) => {
+            batch.add(gapi.client.gmail.users.messages.get({
+                userId: 'me',
+                id: msg.id,
+                format: 'metadata',
+                metadataHeaders: ['From', 'Subject', 'Date', 'List-Unsubscribe'],
+            }), { id: msg.id });
+        });
+
+        const batchResponse = await batch; // executes the batch
+        const detailedMessages = Object.keys(batchResponse.result).map((id) => batchResponse.result[id].result);
+
+        return { messages: detailedMessages, nextPageToken };
+    } catch (error) {
+        console.error('Error fetching inbox messages:', error);
+        throw error;
+    }
+};
+
+// Fetch the full content of an email (used lazily)
+export const fetchFullMessage = async (id) => {
+    try {
+        const response = await gapi.client.gmail.users.messages.get({
+            userId: 'me',
+            id: id,
+            format: 'full',
+        });
+        return response.result;
+    } catch (error) {
+        console.error('Error fetching full message:', error);
+        throw error;
+    }
+};
+
+// MailSwipe actions
+export const archiveMessage = async (id) => {
+    return gapi.client.gmail.users.messages.modify({
+        userId: 'me',
+        id,
+        removeLabelIds: ['INBOX'],
+    });
+};
+
+export const trashMessage = async (id) => {
+    return gapi.client.gmail.users.messages.trash({
+        userId: 'me',
+        id,
+    });
+};
+
+export const keepMessage = async (id, keepLabelId) => {
+    return gapi.client.gmail.users.messages.modify({
+        userId: 'me',
+        id,
+        removeLabelIds: ['INBOX'],
+        addLabelIds: [keepLabelId],
+    });
+};
+
+export const untrashMessage = async (id) => {
+    return gapi.client.gmail.users.messages.untrash({ userId: 'me', id });
+};
+
+export const unarchiveMessage = async (id) => {
+    return gapi.client.gmail.users.messages.modify({ userId: 'me', id, addLabelIds: ['INBOX'] });
+};
+
+export const unkeepMessage = async (id, keepLabelId) => {
+    return gapi.client.gmail.users.messages.modify({ userId: 'me', id, addLabelIds: ['INBOX'], removeLabelIds: [keepLabelId] });
+};
+
+// Ensuring the Keep label exists
+export const ensureMailSwipeLabel = async () => {
+    const PARENT_LABEL_NAME = 'MailSwipe';
+    const KEPT_LABEL_NAME = 'MailSwipe/Kept';
+
+    try {
+        const { result } = await gapi.client.gmail.users.labels.list({ userId: 'me' });
+        const labels = result.labels || [];
+
+        let parentLabel = labels.find(l => l.name === PARENT_LABEL_NAME);
+        let keptLabel = labels.find(l => l.name === KEPT_LABEL_NAME);
+
+        if (!parentLabel) {
+            const response = await gapi.client.gmail.users.labels.create({
+                userId: 'me',
+                resource: {
+                    name: PARENT_LABEL_NAME,
+                    labelListVisibility: 'labelShow',
+                    messageListVisibility: 'show',
+                }
+            });
+            parentLabel = response.result;
+        }
+
+        if (!keptLabel) {
+            const response = await gapi.client.gmail.users.labels.create({
+                userId: 'me',
+                resource: {
+                    name: KEPT_LABEL_NAME,
+                    labelListVisibility: 'labelShow',
+                    messageListVisibility: 'show',
+                }
+            });
+            keptLabel = response.result;
+        }
+
+        return keptLabel.id;
+    } catch (error) {
+        console.error('Failed to ensure labels:', error);
+        throw error;
+    }
+};

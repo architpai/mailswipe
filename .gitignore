@@ -1,0 +1,6 @@
+node_modules
+dist
+.env
+
+# ML model files (large binaries, download with scripts/download-models.sh)
+public/models/
