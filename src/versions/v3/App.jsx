@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import TopNav from './TopNav';
 import Sidebar from './Sidebar';
 import CardStack from './CardStack';
@@ -7,6 +8,359 @@ import Toast from './Toast';
 import { useAuth } from '../../hooks/useAuth';
 import { useEmails } from '../../hooks/useEmails';
 import { useML } from '../../hooks/useML';
+
+// ── Demo sequence for landing page ──────────────────────────────────
+const DEMO_STEPS = [
+  {
+    from: 'NEWSLETTER CO.',
+    subject: 'YOUR WEEKLY DIGEST',
+    snippet: 'THE TOP STORIES YOU MISSED THIS WEEK AND MORE...',
+    tag: 'NEWSLETTER',
+    direction: 'right',
+    exitX: 600,
+    exitY: 0,
+    exitRotate: 18,
+    label: 'KEEP →',
+    labelColor: '#16a34a',
+    callout: 'AI SORTS. YOU DECIDE.',
+  },
+  {
+    from: 'PROMO@DEALS.COM',
+    subject: '50% OFF EVERYTHING',
+    snippet: 'LIMITED TIME OFFER. USE CODE SAVE50 AT CHECKOUT...',
+    tag: 'SPAM',
+    direction: 'left',
+    exitX: -600,
+    exitY: 0,
+    exitRotate: -18,
+    label: '← TRASH',
+    labelColor: '#ff0000',
+    callout: 'ONE SWIPE. GONE.',
+  },
+  {
+    from: 'TEAM@WORK.CO',
+    subject: 'Q4 PLANNING NOTES',
+    snippet: 'ATTACHED ARE THE NOTES FROM FRIDAY\'S SESSION...',
+    tag: 'WORK',
+    direction: 'up',
+    exitX: 0,
+    exitY: -600,
+    exitRotate: 0,
+    label: '↑ ARCHIVE',
+    labelColor: '#2563eb',
+    callout: 'SAVE FOR LATER. INSTANTLY.',
+  },
+];
+
+const PAUSE_STEP = {
+  label: '',
+  callout: 'UNDO ANYTIME. POWERED BY GMAIL.',
+  labelColor: '#000',
+};
+
+// ── Demo card component ─────────────────────────────────────────────
+function DemoCard({ step, phase, onExitComplete }) {
+  // phase: 'enter' -> 'idle' -> 'swiping' -> exit
+  const variants = {
+    enter: { x: 0, y: 30, rotate: 0, opacity: 0, scale: 0.95 },
+    idle: { x: 0, y: 0, rotate: 0, opacity: 1, scale: 1 },
+    exit: {
+      x: step.exitX,
+      y: step.exitY,
+      rotate: step.exitRotate,
+      opacity: 0,
+      scale: 0.9,
+    },
+  };
+
+  return (
+    <motion.div
+      className="w-[280px] sm:w-[320px] border-[3px] border-black bg-white p-5 relative select-none"
+      style={{ fontFamily: 'monospace' }}
+      variants={variants}
+      initial="enter"
+      animate={phase === 'swiping' ? 'exit' : 'idle'}
+      exit="exit"
+      transition={
+        phase === 'swiping'
+          ? { duration: 0.5, ease: [0.22, 1, 0.36, 1] }
+          : { duration: 0.35, ease: [0.22, 1, 0.36, 1] }
+      }
+      onAnimationComplete={(definition) => {
+        if (definition === 'exit' && onExitComplete) onExitComplete();
+      }}
+    >
+      {/* Tag */}
+      <div className="inline-block bg-black text-white text-[10px] font-bold tracking-wider px-2 py-0.5 mb-3 uppercase">
+        {step.tag}
+      </div>
+
+      {/* From */}
+      <div className="text-[10px] uppercase tracking-[0.15em] text-black/50 font-bold mb-1">
+        FROM: {step.from}
+      </div>
+
+      {/* Subject */}
+      <div className="text-base sm:text-lg font-black uppercase tracking-tight leading-tight text-black mb-2">
+        {step.subject}
+      </div>
+
+      {/* Snippet */}
+      <div className="text-xs text-black/40 uppercase tracking-wide leading-relaxed">
+        {step.snippet}
+      </div>
+
+      {/* Bottom rule */}
+      <div className="mt-4 pt-3 border-t-[2px] border-black/10 flex justify-between items-center">
+        <span className="text-[9px] uppercase tracking-widest text-black/30 font-bold">2 HOURS AGO</span>
+        <span className="text-[9px] uppercase tracking-widest text-black/30 font-bold">TAP TO VIEW</span>
+      </div>
+
+      {/* Swipe direction overlay — appears during swipe */}
+      <AnimatePresence>
+        {phase === 'swiping' && (
+          <motion.div
+            className="absolute inset-0 flex items-center justify-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            style={{
+              backgroundColor:
+                step.direction === 'left'
+                  ? 'rgba(255,0,0,0.9)'
+                  : step.direction === 'right'
+                  ? 'rgba(22,163,74,0.1)'
+                  : 'rgba(37,99,235,0.1)',
+            }}
+          >
+            <span
+              className="text-3xl sm:text-4xl font-black uppercase tracking-tight"
+              style={{
+                color: step.direction === 'left' ? '#fff' : step.labelColor,
+                borderBottom:
+                  step.direction === 'right'
+                    ? `4px solid ${step.labelColor}`
+                    : step.direction === 'up'
+                    ? `4px solid ${step.labelColor}`
+                    : 'none',
+                transform:
+                  step.direction === 'right'
+                    ? 'rotate(12deg)'
+                    : step.direction === 'left'
+                    ? 'rotate(-12deg)'
+                    : 'none',
+              }}
+            >
+              {step.direction === 'right' ? 'KEEP' : step.direction === 'left' ? 'TRASH' : 'ARCHIVE'}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+// ── Landing page ────────────────────────────────────────────────────
+function LandingPage({ onLogin }) {
+  const [stepIndex, setStepIndex] = useState(0);
+  const [phase, setPhase] = useState('idle'); // 'idle' | 'swiping' | 'pausing' | 'transitioning'
+  const [cardKey, setCardKey] = useState(0);
+  const timerRef = useRef(null);
+
+  const currentStep = DEMO_STEPS[stepIndex];
+  const isPausing = phase === 'pausing';
+
+  const advanceToNextStep = useCallback(() => {
+    const nextIndex = (stepIndex + 1) % DEMO_STEPS.length;
+    if (nextIndex === 0) {
+      // Show pause message before looping
+      setPhase('pausing');
+      timerRef.current = setTimeout(() => {
+        setStepIndex(0);
+        setCardKey((k) => k + 1);
+        setPhase('idle');
+      }, 2500);
+    } else {
+      setStepIndex(nextIndex);
+      setCardKey((k) => k + 1);
+      setPhase('idle');
+    }
+  }, [stepIndex]);
+
+  // Start swipe after idle pause
+  useEffect(() => {
+    if (phase === 'idle') {
+      timerRef.current = setTimeout(() => {
+        setPhase('swiping');
+      }, 1800);
+    }
+    return () => clearTimeout(timerRef.current);
+  }, [phase, cardKey]);
+
+  // After swipe animation completes, advance
+  const handleExitComplete = useCallback(() => {
+    advanceToNextStep();
+  }, [advanceToNextStep]);
+
+  // Determine which callout to show
+  const calloutText = isPausing
+    ? PAUSE_STEP.callout
+    : phase === 'swiping' || phase === 'idle'
+    ? currentStep.callout
+    : '';
+
+  const labelText = isPausing
+    ? ''
+    : phase === 'swiping'
+    ? currentStep.label
+    : '';
+
+  const labelColor = isPausing
+    ? PAUSE_STEP.labelColor
+    : currentStep.labelColor;
+
+  return (
+    <div
+      className="w-full h-full flex flex-col bg-white overflow-hidden font-mono select-none"
+      style={{ fontFamily: 'monospace' }}
+    >
+      {/* ── Header ─────────────────────────────── */}
+      <div className="flex-none pt-6 sm:pt-10 px-6 text-center">
+        <div className="flex items-center justify-center gap-2 mb-2">
+          <div className="w-2.5 h-2.5 bg-[#ff0000]" />
+          <h1 className="text-3xl sm:text-5xl font-black text-black tracking-tighter uppercase leading-none">
+            MAILSWIPE
+          </h1>
+          <div className="w-2.5 h-2.5 bg-[#ff0000]" />
+        </div>
+        <p className="text-[10px] sm:text-xs text-black/40 uppercase tracking-[0.2em] font-bold">
+          SWIPE YOUR INBOX CLEAN
+        </p>
+      </div>
+
+      {/* ── Demo area ──────────────────────────── */}
+      <div className="flex-1 flex flex-col items-center justify-center relative min-h-0 px-4">
+        {/* Direction hints — small static indicators */}
+        <div className="absolute inset-0 flex items-center justify-between pointer-events-none px-2 sm:px-8">
+          <motion.div
+            className="text-[10px] font-black uppercase tracking-wider text-black/10"
+            animate={{
+              opacity: phase === 'swiping' && currentStep.direction === 'left' ? 0.6 : 0.1,
+              x: phase === 'swiping' && currentStep.direction === 'left' ? -4 : 0,
+            }}
+            transition={{ duration: 0.3 }}
+          >
+            ← TRASH
+          </motion.div>
+          <motion.div
+            className="text-[10px] font-black uppercase tracking-wider text-black/10"
+            animate={{
+              opacity: phase === 'swiping' && currentStep.direction === 'right' ? 0.6 : 0.1,
+              x: phase === 'swiping' && currentStep.direction === 'right' ? 4 : 0,
+            }}
+            transition={{ duration: 0.3 }}
+          >
+            KEEP →
+          </motion.div>
+        </div>
+
+        {/* Top direction hint */}
+        <motion.div
+          className="absolute top-2 text-[10px] font-black uppercase tracking-wider text-black/10"
+          animate={{
+            opacity: phase === 'swiping' && currentStep.direction === 'up' ? 0.6 : 0.1,
+            y: phase === 'swiping' && currentStep.direction === 'up' ? -4 : 0,
+          }}
+          transition={{ duration: 0.3 }}
+        >
+          ↑ ARCHIVE
+        </motion.div>
+
+        {/* The demo card */}
+        <div className="relative w-[280px] sm:w-[320px] h-[220px] sm:h-[240px] flex items-center justify-center">
+          <AnimatePresence mode="wait">
+            {!isPausing && (
+              <DemoCard
+                key={cardKey}
+                step={currentStep}
+                phase={phase}
+                onExitComplete={handleExitComplete}
+              />
+            )}
+          </AnimatePresence>
+
+          {/* Pause state — no card, just the message */}
+          <AnimatePresence>
+            {isPausing && (
+              <motion.div
+                className="absolute inset-0 flex items-center justify-center"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="border-[3px] border-dashed border-black/15 w-full h-full flex items-center justify-center">
+                  <span className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.15em] text-black/30">
+                    INBOX ZERO
+                  </span>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Callout text — synchronized with swipe */}
+        <div className="mt-5 h-14 flex flex-col items-center justify-start">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={`${stepIndex}-${phase}-${isPausing}`}
+              className="flex flex-col items-center gap-1"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25 }}
+            >
+              {labelText && (
+                <span
+                  className="text-sm sm:text-base font-black uppercase tracking-tight"
+                  style={{ color: labelColor }}
+                >
+                  {labelText}
+                </span>
+              )}
+              <span className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.12em] text-black/50">
+                {calloutText}
+              </span>
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </div>
+
+      {/* ── Footer / Connect ───────────────────── */}
+      <div className="flex-none pb-8 sm:pb-10 px-6 flex flex-col items-center gap-3">
+        <button
+          onClick={onLogin}
+          className="group relative text-sm font-black text-black uppercase tracking-tight cursor-pointer bg-transparent border-none p-0 font-mono"
+        >
+          <span className="relative z-10 px-1 group-hover:text-[#ff0000] transition-colors duration-150">
+            CONNECT GMAIL &rarr;
+          </span>
+          <motion.div
+            className="absolute bottom-0 left-0 h-[3px] bg-black group-hover:bg-[#ff0000]"
+            initial={{ width: '100%' }}
+            whileHover={{ width: '100%' }}
+            transition={{ duration: 0.2 }}
+            style={{ width: '100%' }}
+          />
+        </button>
+        <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-black/20">
+          WORKS WITH GMAIL &mdash; READ, SORT, TRIAGE
+        </span>
+      </div>
+    </div>
+  );
+}
 
 function App() {
   const { token, userProfile, login, logout } = useAuth();
@@ -47,29 +401,7 @@ function App() {
 
   // Login Screen
   if (!token) {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-white p-6 text-center relative overflow-hidden font-mono">
-        <div className="relative z-10 flex flex-col items-center">
-          {/* Red dot accent */}
-          <div className="w-3 h-3 bg-[#ff0000] rounded-none mb-6"></div>
-
-          <h1 className="text-6xl sm:text-8xl font-black text-black tracking-tighter uppercase leading-none mb-4">
-            MAILSWIPE
-          </h1>
-
-          <p className="text-xs text-black uppercase tracking-widest mb-12 font-mono">
-            TRIAGE YOUR INBOX. SWIPE TO DECIDE.
-          </p>
-
-          <a
-            onClick={() => login()}
-            className="text-sm font-bold text-black uppercase tracking-tight underline underline-offset-4 decoration-black cursor-pointer hover:text-[#ff0000] hover:decoration-[#ff0000] transition-colors font-mono select-none"
-          >
-            CONNECT &rarr;
-          </a>
-        </div>
-      </div>
-    );
+    return <LandingPage onLogin={login} />;
   }
 
   // Authenticated View
