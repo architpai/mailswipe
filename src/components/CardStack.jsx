@@ -5,7 +5,7 @@ import Card from './Card';
 const SWIPE_THRESHOLD_X = 120;
 const SWIPE_THRESHOLD_Y = 150;
 
-function SwipeableCard({ email, onSwipe, onOpenDetail }) {
+const SwipeableCard = React.forwardRef(function SwipeableCard({ email, onSwipe, onOpenDetail }, ref) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const rotate = useTransform(x, [-300, 300], [-15, 15]);
@@ -88,7 +88,7 @@ function SwipeableCard({ email, onSwipe, onOpenDetail }) {
       </motion.div>
     </motion.div>
   );
-}
+});
 
 export default function CardStack({ emails, onSwipe, onOpenDetail }) {
   // Handle keyboard shortcuts

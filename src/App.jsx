@@ -12,7 +12,7 @@ import { LogIn } from 'lucide-react';
 function App() {
   const { token, userProfile, login, logout } = useAuth();
   const { emails, setEmails, handleAction, undoAction, stats, isLoading } = useEmails(token);
-  const { isReady, isLoading: isMlLoading, analyzeEmails } = useML();
+  const { isReady, mlStatus, mlProgress, analyzeEmails } = useML();
   
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [lastAction, setLastAction] = useState(null);
@@ -66,7 +66,7 @@ function App() {
 
   return (
     <div className="w-full h-full flex flex-col bg-gray-50 relative">
-      <TopNav userProfile={userProfile} onLogout={logout} isMlLoading={isMlLoading} />
+      <TopNav userProfile={userProfile} onLogout={logout} mlStatus={mlStatus} mlProgress={mlProgress} />
       
       <div className="flex-1 flex flex-col items-center p-4 pt-6 overflow-hidden">
         <Sidebar stats={stats} />

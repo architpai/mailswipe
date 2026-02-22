@@ -3,10 +3,11 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 export function useML() {
     const worker = useRef(null);
     const [isReady, setIsReady] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
-    const [queue, setQueue] = useState([]); // emails waiting to be processed
+    const [mlStatus, setMlStatus] = useState('idle'); // 'idle' | 'loading' | 'ready' | 'failed'
+    const [mlProgress, setMlProgress] = useState({ stage: '', percent: 0, file: '' });
     const processingRef = useRef(new Set());
     const setEmailsCallback = useRef(null);
+    const modelsLoaded = useRef({ classifier: false, summarizer: false });
 
     useEffect(() => {
         if (!worker.current) {
@@ -15,15 +16,47 @@ export function useML() {
             });
 
             worker.current.addEventListener('message', (e) => {
-                const { status, result, id } = e.data;
+                const { status, result, id, data } = e.data;
 
                 if (status === 'READY') {
                     setIsReady(true);
-                    // Initial ping returned, means worker is spun up but pipelines might load later
                 } else if (status === 'LOADING_CLASSIFIER' || status === 'LOADING_SUMMARIZER') {
-                    setIsLoading(true);
+                    setMlStatus('loading');
+
+                    // Transformers.js progress_callback sends: { status, name, file, loaded, total, progress }
+                    if (data) {
+                        const stage = status === 'LOADING_CLASSIFIER' ? 'classifier' : 'summarizer';
+                        const stageLabel = stage === 'classifier' ? 'Classification model' : 'Summarization model';
+
+                        if (data.status === 'progress' && data.total > 0) {
+                            const fileBasename = (data.file || '').split('/').pop() || data.file;
+                            setMlProgress({
+                                stage: stageLabel,
+                                percent: Math.round((data.loaded / data.total) * 100),
+                                file: fileBasename,
+                            });
+                        } else if (data.status === 'initiate') {
+                            const fileBasename = (data.file || '').split('/').pop() || data.file;
+                            setMlProgress({
+                                stage: stageLabel,
+                                percent: 0,
+                                file: fileBasename,
+                            });
+                        } else if (data.status === 'done') {
+                            // Individual file done
+                        } else if (data.status === 'ready') {
+                            // Pipeline ready
+                            if (stage === 'classifier') modelsLoaded.current.classifier = true;
+                            if (stage === 'summarizer') modelsLoaded.current.summarizer = true;
+                        }
+                    }
+                } else if (status === 'MODELS_LOADED') {
+                    setMlStatus('ready');
+                    setMlProgress({ stage: 'Ready', percent: 100, file: '' });
+                } else if (status === 'MODELS_FAILED') {
+                    setMlStatus('failed');
+                    setMlProgress({ stage: 'Using rule-based tagging', percent: 0, file: '' });
                 } else if (status === 'SUCCESS') {
-                    setIsLoading(false);
                     processingRef.current.delete(id);
 
                     if (setEmailsCallback.current && result) {
@@ -52,7 +85,6 @@ export function useML() {
         setEmailsCallback.current = updateEmailsState;
         if (!worker.current) return;
 
-        // Only send ones that haven't been tagged or aren't already processing
         const unprocessed = emailsToAnalyze.filter(e => !e.mlTag && !processingRef.current.has(e.id));
 
         unprocessed.forEach(email => {
@@ -65,5 +97,5 @@ export function useML() {
         });
     }, []);
 
-    return { isReady, isLoading, analyzeEmails };
+    return { isReady, mlStatus, mlProgress, analyzeEmails };
 }

@@ -11,7 +11,6 @@ if (typeof env.backends?.onnx?.logLevel !== 'undefined') {
     env.backends.onnx.logLevel = 'error';
 }
 
-
 // Use promises as mutex to prevent concurrent pipeline loading attempts
 let classifierPromise = null;
 let summarizerPromise = null;
@@ -54,6 +53,26 @@ async function getSummarizationPipeline(progressCallback) {
     return summarizerPromise;
 }
 
+// Preload models as soon as worker starts (don't wait for first email)
+async function preloadModels() {
+    const classifier = await getClassificationPipeline(x => {
+        self.postMessage({ status: 'LOADING_CLASSIFIER', data: x });
+    });
+
+    const summarizer = await getSummarizationPipeline(x => {
+        self.postMessage({ status: 'LOADING_SUMMARIZER', data: x });
+    });
+
+    if (classifier || summarizer) {
+        self.postMessage({ status: 'MODELS_LOADED' });
+    } else {
+        self.postMessage({ status: 'MODELS_FAILED' });
+    }
+}
+
+// Start preloading immediately
+preloadModels();
+
 // Rule-based fallback
 const classifyRuleBased = (email) => {
     const subject = (email.subject || '').toLowerCase();
@@ -92,7 +111,7 @@ self.addEventListener('message', async (event) => {
         let summary = email.snippet;
 
         try {
-            // 1. Classification
+            // 1. Classification (awaits the shared promise — free if already loaded)
             const classifier = await getClassificationPipeline(x => {
                 self.postMessage({ status: 'LOADING_CLASSIFIER', data: x });
             });
@@ -125,7 +144,6 @@ self.addEventListener('message', async (event) => {
             console.warn("ML processing error (using rule-based fallback):", err.message);
         }
 
-        // Always send back a result (ML or rule-based)
         self.postMessage({
             status: 'SUCCESS',
             id,
