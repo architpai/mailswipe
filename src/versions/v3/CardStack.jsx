@@ -1,18 +1,53 @@
-import React, { useEffect, useRef, useCallback } from 'react';
-import { motion, useMotionValue, useTransform, AnimatePresence } from 'framer-motion';
+import React, { useEffect, useRef, useCallback, forwardRef } from 'react';
+import { motion, useMotionValue, useTransform, AnimatePresence, animate } from 'framer-motion';
 import Card from './Card';
 
-const SWIPE_THRESHOLD_X = 120;
-const SWIPE_THRESHOLD_Y = 150;
+const SWIPE_MIN_DISTANCE = 120;
+// Angle zones (0° = right, 90° = up, 180° = left)
+const KEEP_MAX_ANGLE = 70;
+const ARCHIVE_MAX_ANGLE = 130;
 
-const SwipeableCard = React.forwardRef(function SwipeableCard({ email, onSwipe, onOpenDetail }, ref) {
+// Compute swipe angle: 0° pure right, 90° pure up, 180° pure left, >180° downward
+function swipeAngle(px, py) {
+  const raw = Math.atan2(-py, px) * (180 / Math.PI);
+  return raw < 0 ? raw + 360 : raw;
+}
+
+// Dynamic exit based on direction — passed via framer-motion `custom` prop
+const cardExitVariant = (direction) => ({
+  x: direction === 'right' ? 600 : direction === 'left' ? -600 : 0,
+  y: direction === 'up' ? -500 : 0,
+  rotate: direction === 'right' ? 18 : direction === 'left' ? -18 : 0,
+  opacity: 0,
+  transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] },
+});
+
+const SwipeableCard = forwardRef(function SwipeableCard({ email, onSwipe, onOpenDetail, onSetDirection, onUnsubscribe }, ref) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const rotate = useTransform(x, [-300, 300], [-15, 15]);
 
-  const keepOpacity = useTransform(x, [0, SWIPE_THRESHOLD_X], [0, 1]);
-  const trashOpacity = useTransform(x, [0, -SWIPE_THRESHOLD_X], [0, 1]);
-  const archiveOpacity = useTransform(y, [0, -SWIPE_THRESHOLD_Y], [0, 1]);
+  // Angle-aware opacity: only show the overlay for the active zone
+  const keepOpacity = useTransform([x, y], ([lx, ly]) => {
+    const angle = swipeAngle(lx, ly);
+    const dist = Math.sqrt(lx * lx + ly * ly);
+    if (angle > KEEP_MAX_ANGLE && angle < 290) return 0;
+    return Math.min(1, dist / SWIPE_MIN_DISTANCE);
+  });
+
+  const archiveOpacity = useTransform([x, y], ([lx, ly]) => {
+    const angle = swipeAngle(lx, ly);
+    const dist = Math.sqrt(lx * lx + ly * ly);
+    if (angle <= KEEP_MAX_ANGLE || angle > ARCHIVE_MAX_ANGLE) return 0;
+    return Math.min(1, dist / SWIPE_MIN_DISTANCE);
+  });
+
+  const trashOpacity = useTransform([x, y], ([lx, ly]) => {
+    const angle = swipeAngle(lx, ly);
+    const dist = Math.sqrt(lx * lx + ly * ly);
+    if (angle <= ARCHIVE_MAX_ANGLE || angle > 229) return 0;
+    return Math.min(1, dist / SWIPE_MIN_DISTANCE);
+  });
 
   const longPressRef = useRef(null);
   const swiped = useRef(false);
@@ -22,22 +57,55 @@ const SwipeableCard = React.forwardRef(function SwipeableCard({ email, onSwipe, 
     swiped.current = true;
 
     const action = direction === 'right' ? 'keep' : direction === 'left' ? 'trash' : 'archive';
+    onSetDirection(direction);
     onSwipe(email, action);
-  }, [email, onSwipe]);
+  }, [email, onSwipe, onSetDirection]);
+
+  // Keyboard shortcuts — animate overlay, then trigger swipe
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (swiped.current) return;
+
+      let direction = null;
+      switch (e.key) {
+        case 'ArrowRight': direction = 'right'; break;
+        case 'ArrowLeft': direction = 'left'; break;
+        case 'ArrowUp': e.preventDefault(); direction = 'up'; break;
+        case ' ':
+          e.preventDefault();
+          onOpenDetail(email);
+          return;
+        default: return;
+      }
+
+      // Animate motion values to flash the overlay
+      const targetX = direction === 'right' ? SWIPE_MIN_DISTANCE + 30 : direction === 'left' ? -(SWIPE_MIN_DISTANCE + 30) : 0;
+      const targetY = direction === 'up' ? -(SWIPE_MIN_DISTANCE + 30) : 0;
+
+      animate(x, targetX, { duration: 0.1, ease: 'easeOut' });
+      animate(y, targetY, { duration: 0.1, ease: 'easeOut' });
+
+      setTimeout(() => triggerSwipe(direction), 130);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [triggerSwipe, x, y, email, onOpenDetail]);
 
   const handleDragEnd = useCallback((event, info) => {
     const { offset } = info;
+    const dist = Math.sqrt(offset.x ** 2 + offset.y ** 2);
+    if (dist < SWIPE_MIN_DISTANCE) return;
 
-    if (Math.abs(offset.x) > Math.abs(offset.y)) {
-      if (offset.x > SWIPE_THRESHOLD_X) {
-        triggerSwipe('right');
-      } else if (offset.x < -SWIPE_THRESHOLD_X) {
-        triggerSwipe('left');
-      }
-    } else {
-      if (offset.y < -SWIPE_THRESHOLD_Y) {
-        triggerSwipe('up');
-      }
+    const angle = swipeAngle(offset.x, offset.y);
+    if (angle > 229 && angle < 290) return; // straight-down dead zone
+
+    if (angle <= KEEP_MAX_ANGLE || angle >= 290) {
+      triggerSwipe('right');
+    } else if (angle <= ARCHIVE_MAX_ANGLE) {
+      triggerSwipe('up');
+    } else if (angle <= 229) {
+      triggerSwipe('left');
     }
   }, [triggerSwipe]);
 
@@ -53,6 +121,7 @@ const SwipeableCard = React.forwardRef(function SwipeableCard({ email, onSwipe, 
 
   return (
     <motion.div
+      ref={ref}
       className="absolute w-full h-[450px]"
       style={{ x, y, rotate, zIndex: 10 }}
       drag
@@ -61,36 +130,45 @@ const SwipeableCard = React.forwardRef(function SwipeableCard({ email, onSwipe, 
       onPointerDown={startLongPress}
       onPointerUp={cancelLongPress}
       onPointerMove={cancelLongPress}
-      exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.2 } }}
+      exit={cardExitVariant}
     >
-      <Card email={email} isTop={true} />
+      <Card email={email} isTop={true} onUnsubscribe={onUnsubscribe} />
 
-      {/* KEEP -- Black text with green underline */}
+      {/* KEEP — green */}
       <motion.div
-        className="absolute inset-0 rounded-none flex items-center justify-center pointer-events-none"
-        style={{ opacity: keepOpacity }}
+        className="absolute inset-0 flex items-center justify-center pointer-events-none"
+        style={{ opacity: keepOpacity, backgroundColor: 'rgba(22,163,74,0.85)' }}
       >
-        <span className="font-mono font-black text-4xl tracking-tighter text-black uppercase transform rotate-12 border-b-[4px] border-green-600 pb-1">
+        <span
+          className="font-mono font-black text-5xl tracking-tighter uppercase"
+          style={{ color: '#faf9f6', transform: 'rotate(-12deg)' }}
+        >
           KEEP
         </span>
       </motion.div>
 
-      {/* TRASH -- Solid red background with white text */}
+      {/* TRASH — red */}
       <motion.div
-        className="absolute inset-0 rounded-none flex items-center justify-center pointer-events-none bg-[#ff0000]"
-        style={{ opacity: trashOpacity }}
+        className="absolute inset-0 flex items-center justify-center pointer-events-none"
+        style={{ opacity: trashOpacity, backgroundColor: 'rgba(255,0,0,0.85)' }}
       >
-        <span className="font-mono font-black text-4xl tracking-tighter text-white uppercase transform -rotate-12">
+        <span
+          className="font-mono font-black text-5xl tracking-tighter uppercase"
+          style={{ color: '#faf9f6', transform: 'rotate(-12deg)' }}
+        >
           TRASH
         </span>
       </motion.div>
 
-      {/* ARCHIVE -- Blue text with thick black border frame */}
+      {/* ARCHIVE — blue */}
       <motion.div
-        className="absolute inset-0 rounded-none flex items-start justify-center pt-10 pointer-events-none"
-        style={{ opacity: archiveOpacity }}
+        className="absolute inset-0 flex items-center justify-center pointer-events-none"
+        style={{ opacity: archiveOpacity, backgroundColor: 'rgba(37,99,235,0.85)' }}
       >
-        <span className="font-mono font-black text-4xl tracking-tighter text-blue-600 uppercase border-[3px] border-black px-6 py-2">
+        <span
+          className="font-mono font-black text-5xl tracking-tighter uppercase"
+          style={{ color: '#faf9f6', transform: 'rotate(-12deg)' }}
+        >
           ARCHIVE
         </span>
       </motion.div>
@@ -98,43 +176,121 @@ const SwipeableCard = React.forwardRef(function SwipeableCard({ email, onSwipe, 
   );
 });
 
-export default function CardStack({ emails, onSwipe, onOpenDetail }) {
-  // Handle keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (!emails || emails.length === 0) return;
-      const email = emails[0];
+export default function CardStack({ emails, onSwipe, onOpenDetail, onUnsubscribe, stats, fetchError, onRetry }) {
+  const exitDirectionRef = useRef('right');
 
-      switch (e.key) {
-        case 'ArrowRight':
-          onSwipe(email, 'keep');
-          break;
-        case 'ArrowLeft':
-          onSwipe(email, 'trash');
-          break;
-        case 'ArrowUp':
-          onSwipe(email, 'archive');
-          break;
-        case ' ':
-          e.preventDefault();
-          onOpenDetail(email);
-          break;
-        default:
-          break;
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [emails, onSwipe, onOpenDetail]);
+  const setDirection = useCallback((dir) => {
+    exitDirectionRef.current = dir;
+  }, []);
+
+  const handleSwipeWithDirection = useCallback((email, action) => {
+    onSwipe(email, action);
+  }, [onSwipe]);
 
   if (!emails || emails.length === 0) {
+    // Fetch error state
+    if (fetchError) {
+      return (
+        <div className="flex-1 flex flex-col items-center justify-center font-mono px-6">
+          <div className="w-full max-w-sm border-[3px] border-black p-6 bg-white">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-8 h-8 bg-[#ff0000] flex items-center justify-center text-white font-black text-sm">!</div>
+              <h2 className="text-base font-black text-black uppercase tracking-tight">FETCH FAILED</h2>
+            </div>
+            <p className="text-xs text-black/50 uppercase tracking-wider mb-5 leading-relaxed">
+              COULD NOT LOAD YOUR EMAILS. CHECK YOUR CONNECTION AND TRY AGAIN.
+            </p>
+            <button
+              onClick={onRetry}
+              className="w-full py-2.5 bg-black text-white text-xs font-black uppercase tracking-widest cursor-pointer border-none font-mono hover:bg-[#ff0000] transition-colors duration-150"
+            >
+              RETRY
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // Inbox zero — user triaged everything
+    const triaged = stats?.total > 0;
     return (
-      <div className="flex-1 flex flex-col items-center justify-center font-mono">
-        <div className="text-6xl mb-4 text-black">*</div>
-        <h2 className="text-xl font-black text-black uppercase tracking-tighter mb-1">
-          ALL CLEAR
-        </h2>
-        <p className="text-xs text-black uppercase tracking-wider">NO MORE EMAILS TO TRIAGE.</p>
+      <div className="flex-1 flex flex-col items-center justify-center font-mono px-6">
+        <motion.div
+          className="flex flex-col items-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        >
+          {/* Animated check square */}
+          <motion.div
+            className="w-16 h-16 border-[3px] border-black flex items-center justify-center mb-5"
+            initial={{ scale: 0.5, rotate: -12 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ duration: 0.5, ease: [0.34, 1.56, 0.64, 1] }}
+          >
+            <motion.svg
+              width="32" height="32" viewBox="0 0 32 32" fill="none"
+              initial={{ pathLength: 0 }}
+              animate={{ pathLength: 1 }}
+            >
+              <motion.path
+                d="M8 16L14 22L24 10"
+                stroke="black"
+                strokeWidth="3.5"
+                strokeLinecap="square"
+                fill="none"
+                initial={{ pathLength: 0 }}
+                animate={{ pathLength: 1 }}
+                transition={{ duration: 0.6, delay: 0.3, ease: 'easeOut' }}
+              />
+            </motion.svg>
+          </motion.div>
+
+          <motion.h2
+            className="text-2xl font-black text-black uppercase tracking-tighter mb-2"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+          >
+            {triaged ? 'INBOX ZERO' : 'ALL CLEAR'}
+          </motion.h2>
+
+          <motion.p
+            className="text-xs text-black/50 uppercase tracking-wider mb-6 text-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+          >
+            {triaged
+              ? 'GREAT JOB. YOU TRIAGED YOUR ENTIRE INBOX.'
+              : 'NO EMAILS TO TRIAGE RIGHT NOW.'}
+          </motion.p>
+
+          {/* Stats summary — only show if user triaged something */}
+          {triaged && (
+            <motion.div
+              className="flex gap-0 border-[2px] border-black"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.7 }}
+            >
+              <div className="flex items-center gap-1.5 px-3 py-2">
+                <div className="w-2 h-2 bg-[#16a34a]" />
+                <span className="text-xs font-black tabular-nums">{stats.kept || 0}</span>
+              </div>
+              <div className="border-l-[2px] border-black/15" />
+              <div className="flex items-center gap-1.5 px-3 py-2">
+                <div className="w-2 h-2 bg-[#2563eb]" />
+                <span className="text-xs font-black tabular-nums">{stats.archived || 0}</span>
+              </div>
+              <div className="border-l-[2px] border-black/15" />
+              <div className="flex items-center gap-1.5 px-3 py-2">
+                <div className="w-2 h-2 bg-[#ff0000]" />
+                <span className="text-xs font-black tabular-nums">{stats.trashed || 0}</span>
+              </div>
+            </motion.div>
+          )}
+        </motion.div>
       </div>
     );
   }
@@ -161,12 +317,14 @@ export default function CardStack({ emails, onSwipe, onOpenDetail }) {
       })}
 
       {/* Top card (swipeable) */}
-      <AnimatePresence mode="popLayout">
+      <AnimatePresence mode="popLayout" custom={exitDirectionRef.current}>
         <SwipeableCard
           key={emails[0].id}
           email={emails[0]}
-          onSwipe={onSwipe}
+          onSwipe={handleSwipeWithDirection}
           onOpenDetail={onOpenDetail}
+          onSetDirection={setDirection}
+          onUnsubscribe={onUnsubscribe}
         />
       </AnimatePresence>
     </div>

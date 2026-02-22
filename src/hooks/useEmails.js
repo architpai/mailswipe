@@ -8,6 +8,15 @@ export function useEmails(token) {
     const [pageToken, setPageToken] = useState(null);
     const [stats, setStats] = useState({ kept: 0, trashed: 0, archived: 0, total: 0 });
     const [keepLabelId, setKeepLabelId] = useState(null);
+    const [fetchError, setFetchError] = useState(null);
+
+    // Reset all state when token changes (new login or logout)
+    useEffect(() => {
+        setEmails([]);
+        setPageToken(null);
+        setStats({ kept: 0, trashed: 0, archived: 0, total: 0 });
+        setFetchError(null);
+    }, [token]);
 
     // Initialize labels once
     useEffect(() => {
@@ -20,12 +29,18 @@ export function useEmails(token) {
         if (!token || isLoading) return;
         setIsLoading(true);
         try {
+            setFetchError(null);
             const response = await fetchInboxMessages(pageToken);
             const parsed = response.messages.map(parseEmailHeaders);
-            setEmails(prev => [...prev, ...parsed]);
+            setEmails(prev => {
+                const existingIds = new Set(prev.map(e => e.id));
+                const newEmails = parsed.filter(e => e.id && !existingIds.has(e.id));
+                return [...prev, ...newEmails];
+            });
             setPageToken(response.nextPageToken);
         } catch (err) {
             console.error('Failed to fetch emails', err);
+            setFetchError(err.message || 'Failed to fetch emails');
         } finally {
             setIsLoading(false);
         }
@@ -33,7 +48,7 @@ export function useEmails(token) {
 
     // Initial load
     useEffect(() => {
-        if (token && emails.length === 0 && !isLoading && !pageToken) {
+        if (token && emails.length === 0 && !isLoading && pageToken === null) {
             loadMore();
         }
     }, [token, emails.length, isLoading, pageToken, loadMore]);
@@ -91,5 +106,5 @@ export function useEmails(token) {
         }
     };
 
-    return { emails, setEmails, isLoading, stats, loadMore, handleAction, undoAction };
+    return { emails, setEmails, isLoading, stats, loadMore, handleAction, undoAction, fetchError };
 }

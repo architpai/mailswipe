@@ -15,6 +15,9 @@ export function useML() {
                 type: 'module'
             });
 
+            // Track per-file progress for overall calculation
+            const fileProgress = {};
+
             worker.current.addEventListener('message', (e) => {
                 const { status, result, id, data } = e.data;
 
@@ -22,40 +25,39 @@ export function useML() {
                     setIsReady(true);
                 } else if (status === 'LOADING_CLASSIFIER' || status === 'LOADING_SUMMARIZER') {
                     setMlStatus('loading');
+                    const isClassifier = status === 'LOADING_CLASSIFIER';
+                    const stageLabel = isClassifier ? 'Classification model' : 'Summarization model';
+                    // Classifier = 0-50%, Summarizer = 50-100%
+                    const stageOffset = isClassifier ? 0 : 50;
 
-                    // Transformers.js progress_callback sends: { status, name, file, loaded, total, progress }
                     if (data) {
-                        const stage = status === 'LOADING_CLASSIFIER' ? 'classifier' : 'summarizer';
-                        const stageLabel = stage === 'classifier' ? 'Classification model' : 'Summarization model';
+                        const fileKey = `${status}:${data.file || ''}`;
 
                         if (data.status === 'progress' && data.total > 0) {
-                            const fileBasename = (data.file || '').split('/').pop() || data.file;
-                            setMlProgress({
-                                stage: stageLabel,
-                                percent: Math.round((data.loaded / data.total) * 100),
-                                file: fileBasename,
-                            });
-                        } else if (data.status === 'initiate') {
-                            const fileBasename = (data.file || '').split('/').pop() || data.file;
-                            setMlProgress({
-                                stage: stageLabel,
-                                percent: 0,
-                                file: fileBasename,
-                            });
+                            fileProgress[fileKey] = (data.loaded / data.total) * 50;
                         } else if (data.status === 'done') {
-                            // Individual file done
+                            fileProgress[fileKey] = 50;
                         } else if (data.status === 'ready') {
-                            // Pipeline ready
-                            if (stage === 'classifier') modelsLoaded.current.classifier = true;
-                            if (stage === 'summarizer') modelsLoaded.current.summarizer = true;
+                            if (isClassifier) modelsLoaded.current.classifier = true;
+                            else modelsLoaded.current.summarizer = true;
                         }
+
+                        // Sum all file progress contributions for this stage
+                        const stageFiles = Object.keys(fileProgress).filter(k => k.startsWith(status));
+                        const stageTotal = stageFiles.length > 0
+                            ? stageFiles.reduce((sum, k) => sum + fileProgress[k], 0) / stageFiles.length
+                            : 0;
+
+                        const overall = Math.round(stageOffset + stageTotal);
+                        const fileBasename = (data.file || '').split('/').pop() || '';
+                        setMlProgress({ stage: stageLabel, percent: Math.min(99, overall), file: fileBasename });
                     }
                 } else if (status === 'MODELS_LOADED') {
                     setMlStatus('ready');
                     setMlProgress({ stage: 'Ready', percent: 100, file: '' });
                 } else if (status === 'MODELS_FAILED') {
                     setMlStatus('failed');
-                    setMlProgress({ stage: 'Using rule-based tagging', percent: 0, file: '' });
+                    setMlProgress({ stage: 'Rule-based tagging', percent: 100, file: '' });
                 } else if (status === 'SUCCESS') {
                     processingRef.current.delete(id);
 

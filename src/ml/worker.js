@@ -53,15 +53,32 @@ async function getSummarizationPipeline(progressCallback) {
     return summarizerPromise;
 }
 
+// Race a promise against a timeout — returns null on timeout
+function withTimeout(promise, ms) {
+    return Promise.race([
+        promise,
+        new Promise(resolve => setTimeout(() => resolve(null), ms))
+    ]);
+}
+
+const MODEL_LOAD_TIMEOUT = 30000; // 30s for preload
+const MODEL_INFER_TIMEOUT = 10000; // 10s per email processing
+
 // Preload models as soon as worker starts (don't wait for first email)
 async function preloadModels() {
-    const classifier = await getClassificationPipeline(x => {
-        self.postMessage({ status: 'LOADING_CLASSIFIER', data: x });
-    });
+    const classifier = await withTimeout(
+        getClassificationPipeline(x => {
+            self.postMessage({ status: 'LOADING_CLASSIFIER', data: x });
+        }),
+        MODEL_LOAD_TIMEOUT
+    );
 
-    const summarizer = await getSummarizationPipeline(x => {
-        self.postMessage({ status: 'LOADING_SUMMARIZER', data: x });
-    });
+    const summarizer = await withTimeout(
+        getSummarizationPipeline(x => {
+            self.postMessage({ status: 'LOADING_SUMMARIZER', data: x });
+        }),
+        MODEL_LOAD_TIMEOUT
+    );
 
     if (classifier || summarizer) {
         self.postMessage({ status: 'MODELS_LOADED' });
@@ -111,14 +128,20 @@ self.addEventListener('message', async (event) => {
         let summary = email.snippet;
 
         try {
-            // 1. Classification (awaits the shared promise — free if already loaded)
-            const classifier = await getClassificationPipeline(x => {
-                self.postMessage({ status: 'LOADING_CLASSIFIER', data: x });
-            });
+            // 1. Classification — timeout prevents hanging if model never loads
+            const classifier = await withTimeout(
+                getClassificationPipeline(x => {
+                    self.postMessage({ status: 'LOADING_CLASSIFIER', data: x });
+                }),
+                MODEL_INFER_TIMEOUT
+            );
 
             if (classifier) {
                 const classificationLabels = ["personal", "work", "newsletter", "receipt", "alert", "spam"];
-                const clsResult = await classifier(inputString, classificationLabels);
+                const clsResult = await withTimeout(
+                    classifier(inputString, classificationLabels),
+                    MODEL_INFER_TIMEOUT
+                );
                 if (clsResult && clsResult.labels && clsResult.labels.length > 0) {
                     tag = clsResult.labels[0].toLowerCase();
                 }
@@ -126,15 +149,18 @@ self.addEventListener('message', async (event) => {
 
             // 2. Summarize (only for longer emails)
             if (inputString.length >= 80) {
-                const summarizer = await getSummarizationPipeline(x => {
-                    self.postMessage({ status: 'LOADING_SUMMARIZER', data: x });
-                });
+                const summarizer = await withTimeout(
+                    getSummarizationPipeline(x => {
+                        self.postMessage({ status: 'LOADING_SUMMARIZER', data: x });
+                    }),
+                    MODEL_INFER_TIMEOUT
+                );
 
                 if (summarizer) {
-                    const summaryResult = await summarizer(inputString, {
-                        max_new_tokens: 30,
-                        min_new_tokens: 5,
-                    });
+                    const summaryResult = await withTimeout(
+                        summarizer(inputString, { max_new_tokens: 30, min_new_tokens: 5 }),
+                        MODEL_INFER_TIMEOUT
+                    );
                     if (summaryResult && summaryResult.length > 0) {
                         summary = summaryResult[0].summary_text;
                     }

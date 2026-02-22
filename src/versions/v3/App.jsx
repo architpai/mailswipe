@@ -59,36 +59,22 @@ const PAUSE_STEP = {
 };
 
 // ── Demo card component ─────────────────────────────────────────────
-function DemoCard({ step, phase, onExitComplete }) {
-  // phase: 'enter' -> 'idle' -> 'swiping' -> exit
-  const variants = {
-    enter: { x: 0, y: 30, rotate: 0, opacity: 0, scale: 0.95 },
-    idle: { x: 0, y: 0, rotate: 0, opacity: 1, scale: 1 },
-    exit: {
-      x: step.exitX,
-      y: step.exitY,
-      rotate: step.exitRotate,
-      opacity: 0,
-      scale: 0.9,
-    },
-  };
-
+// Only AnimatePresence drives exit — no manual animate-to-exit.
+function DemoCard({ step, isSwiping }) {
   return (
     <motion.div
-      className="w-[280px] sm:w-[320px] border-[3px] border-black bg-white p-5 relative select-none"
+      className="absolute w-[280px] sm:w-[320px] border-[3px] border-black bg-white p-5 select-none"
       style={{ fontFamily: 'monospace' }}
-      variants={variants}
-      initial="enter"
-      animate={phase === 'swiping' ? 'exit' : 'idle'}
-      exit="exit"
-      transition={
-        phase === 'swiping'
-          ? { duration: 0.5, ease: [0.22, 1, 0.36, 1] }
-          : { duration: 0.35, ease: [0.22, 1, 0.36, 1] }
-      }
-      onAnimationComplete={(definition) => {
-        if (definition === 'exit' && onExitComplete) onExitComplete();
+      initial={{ x: 0, y: 30, rotate: 0, opacity: 0, scale: 0.95 }}
+      animate={{ x: 0, y: 0, rotate: 0, opacity: 1, scale: 1 }}
+      exit={{
+        x: step.exitX,
+        y: step.exitY,
+        rotate: step.exitRotate,
+        opacity: 0,
+        scale: 0.9,
       }}
+      transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
     >
       {/* Tag */}
       <div className="inline-block bg-black text-white text-[10px] font-bold tracking-wider px-2 py-0.5 mb-3 uppercase">
@@ -116,14 +102,13 @@ function DemoCard({ step, phase, onExitComplete }) {
         <span className="text-[9px] uppercase tracking-widest text-black/30 font-bold">TAP TO VIEW</span>
       </div>
 
-      {/* Swipe direction overlay — appears during swipe */}
+      {/* Swipe direction overlay — fades in before exit */}
       <AnimatePresence>
-        {phase === 'swiping' && (
+        {isSwiping && (
           <motion.div
             className="absolute inset-0 flex items-center justify-center"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
             style={{
               backgroundColor:
@@ -162,63 +147,57 @@ function DemoCard({ step, phase, onExitComplete }) {
 }
 
 // ── Landing page ────────────────────────────────────────────────────
+// State machine: idle → swiping (overlay shows) → exiting (card unmounts) → idle/pausing
 function LandingPage({ onLogin }) {
   const [stepIndex, setStepIndex] = useState(0);
-  const [phase, setPhase] = useState('idle'); // 'idle' | 'swiping' | 'pausing' | 'transitioning'
-  const [cardKey, setCardKey] = useState(0);
+  const [showCard, setShowCard] = useState(true);
+  const [isSwiping, setIsSwiping] = useState(false);
+  const [isPausing, setIsPausing] = useState(false);
   const timerRef = useRef(null);
 
   const currentStep = DEMO_STEPS[stepIndex];
-  const isPausing = phase === 'pausing';
 
-  const advanceToNextStep = useCallback(() => {
+  // Phase 1: Card is visible and idle → after delay, show swipe overlay
+  useEffect(() => {
+    if (showCard && !isSwiping) {
+      timerRef.current = setTimeout(() => setIsSwiping(true), 1800);
+      return () => clearTimeout(timerRef.current);
+    }
+  }, [showCard, isSwiping]);
+
+  // Phase 2: Overlay is showing → after brief display, remove card (triggers exit)
+  useEffect(() => {
+    if (showCard && isSwiping) {
+      timerRef.current = setTimeout(() => setShowCard(false), 400);
+      return () => clearTimeout(timerRef.current);
+    }
+  }, [showCard, isSwiping]);
+
+  // Phase 3: AnimatePresence exit completes → advance to next step
+  const handleExitComplete = useCallback(() => {
+    setIsSwiping(false);
     const nextIndex = (stepIndex + 1) % DEMO_STEPS.length;
+
     if (nextIndex === 0) {
-      // Show pause message before looping
-      setPhase('pausing');
+      // Pause before looping
+      setIsPausing(true);
       timerRef.current = setTimeout(() => {
+        setIsPausing(false);
         setStepIndex(0);
-        setCardKey((k) => k + 1);
-        setPhase('idle');
+        setShowCard(true);
       }, 2500);
     } else {
       setStepIndex(nextIndex);
-      setCardKey((k) => k + 1);
-      setPhase('idle');
+      setShowCard(true);
     }
   }, [stepIndex]);
 
-  // Start swipe after idle pause
-  useEffect(() => {
-    if (phase === 'idle') {
-      timerRef.current = setTimeout(() => {
-        setPhase('swiping');
-      }, 1800);
-    }
-    return () => clearTimeout(timerRef.current);
-  }, [phase, cardKey]);
-
-  // After swipe animation completes, advance
-  const handleExitComplete = useCallback(() => {
-    advanceToNextStep();
-  }, [advanceToNextStep]);
-
-  // Determine which callout to show
+  // Callout text
   const calloutText = isPausing
     ? PAUSE_STEP.callout
-    : phase === 'swiping' || phase === 'idle'
-    ? currentStep.callout
-    : '';
-
-  const labelText = isPausing
-    ? ''
-    : phase === 'swiping'
-    ? currentStep.label
-    : '';
-
-  const labelColor = isPausing
-    ? PAUSE_STEP.labelColor
-    : currentStep.labelColor;
+    : currentStep.callout;
+  const labelText = isSwiping ? currentStep.label : '';
+  const labelColor = isPausing ? PAUSE_STEP.labelColor : currentStep.labelColor;
 
   return (
     <div
@@ -246,8 +225,8 @@ function LandingPage({ onLogin }) {
           <motion.div
             className="text-[10px] font-black uppercase tracking-wider text-black/10"
             animate={{
-              opacity: phase === 'swiping' && currentStep.direction === 'left' ? 0.6 : 0.1,
-              x: phase === 'swiping' && currentStep.direction === 'left' ? -4 : 0,
+              opacity: isSwiping && currentStep.direction === 'left' ? 0.6 : 0.1,
+              x: isSwiping && currentStep.direction === 'left' ? -4 : 0,
             }}
             transition={{ duration: 0.3 }}
           >
@@ -256,8 +235,8 @@ function LandingPage({ onLogin }) {
           <motion.div
             className="text-[10px] font-black uppercase tracking-wider text-black/10"
             animate={{
-              opacity: phase === 'swiping' && currentStep.direction === 'right' ? 0.6 : 0.1,
-              x: phase === 'swiping' && currentStep.direction === 'right' ? 4 : 0,
+              opacity: isSwiping && currentStep.direction === 'right' ? 0.6 : 0.1,
+              x: isSwiping && currentStep.direction === 'right' ? 4 : 0,
             }}
             transition={{ duration: 0.3 }}
           >
@@ -269,8 +248,8 @@ function LandingPage({ onLogin }) {
         <motion.div
           className="absolute top-2 text-[10px] font-black uppercase tracking-wider text-black/10"
           animate={{
-            opacity: phase === 'swiping' && currentStep.direction === 'up' ? 0.6 : 0.1,
-            y: phase === 'swiping' && currentStep.direction === 'up' ? -4 : 0,
+            opacity: isSwiping && currentStep.direction === 'up' ? 0.6 : 0.1,
+            y: isSwiping && currentStep.direction === 'up' ? -4 : 0,
           }}
           transition={{ duration: 0.3 }}
         >
@@ -279,13 +258,12 @@ function LandingPage({ onLogin }) {
 
         {/* The demo card */}
         <div className="relative w-[280px] sm:w-[320px] h-[220px] sm:h-[240px] flex items-center justify-center">
-          <AnimatePresence mode="wait">
-            {!isPausing && (
+          <AnimatePresence mode="wait" onExitComplete={handleExitComplete}>
+            {showCard && (
               <DemoCard
-                key={cardKey}
+                key={stepIndex}
                 step={currentStep}
-                phase={phase}
-                onExitComplete={handleExitComplete}
+                isSwiping={isSwiping}
               />
             )}
           </AnimatePresence>
@@ -314,7 +292,7 @@ function LandingPage({ onLogin }) {
         <div className="mt-5 h-14 flex flex-col items-center justify-start">
           <AnimatePresence mode="wait">
             <motion.div
-              key={`${stepIndex}-${phase}-${isPausing}`}
+              key={`${stepIndex}-${isSwiping}-${isPausing}`}
               className="flex flex-col items-center gap-1"
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -338,7 +316,7 @@ function LandingPage({ onLogin }) {
       </div>
 
       {/* ── Footer / Connect ───────────────────── */}
-      <div className="flex-none pb-8 sm:pb-10 px-6 flex flex-col items-center gap-3">
+      <div className="flex-none pb-8 sm:pb-10 px-6 flex flex-col items-center">
         <button
           onClick={onLogin}
           className="group relative text-sm font-black text-black uppercase tracking-tight cursor-pointer bg-transparent border-none p-0 font-mono"
@@ -346,17 +324,8 @@ function LandingPage({ onLogin }) {
           <span className="relative z-10 px-1 group-hover:text-[#ff0000] transition-colors duration-150">
             CONNECT GMAIL &rarr;
           </span>
-          <motion.div
-            className="absolute bottom-0 left-0 h-[3px] bg-black group-hover:bg-[#ff0000]"
-            initial={{ width: '100%' }}
-            whileHover={{ width: '100%' }}
-            transition={{ duration: 0.2 }}
-            style={{ width: '100%' }}
-          />
+          <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-black group-hover:bg-[#ff0000] transition-colors duration-150" />
         </button>
-        <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-black/20">
-          WORKS WITH GMAIL &mdash; READ, SORT, TRIAGE
-        </span>
       </div>
     </div>
   );
@@ -364,7 +333,7 @@ function LandingPage({ onLogin }) {
 
 function App() {
   const { token, userProfile, login, logout } = useAuth();
-  const { emails, setEmails, handleAction, undoAction, stats, isLoading } = useEmails(token);
+  const { emails, setEmails, handleAction, undoAction, stats, isLoading, fetchError, loadMore } = useEmails(token);
   const { isReady, mlStatus, mlProgress, analyzeEmails } = useML();
 
   const [selectedEmail, setSelectedEmail] = useState(null);
@@ -423,6 +392,10 @@ function App() {
               emails={emails}
               onSwipe={handleSwipe}
               onOpenDetail={(email) => setSelectedEmail(email)}
+              onUnsubscribe={handleUnsubscribe}
+              stats={stats}
+              fetchError={fetchError}
+              onRetry={loadMore}
             />
           )}
         </div>

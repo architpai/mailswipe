@@ -1,38 +1,102 @@
 import React from 'react';
 
+// Segmented progress bar — Casio bit-display style
+// Fills in discrete blocks instead of a smooth bar
+function SegmentedProgress({ percent }) {
+  const totalSegments = 8;
+  const filled = Math.round((percent / 100) * totalSegments);
+
+  return (
+    <div className="flex gap-[2px]">
+      {Array.from({ length: totalSegments }).map((_, i) => (
+        <div
+          key={i}
+          className="w-[6px] h-[10px]"
+          style={{
+            backgroundColor: i < filled ? '#ca8a04' : 'rgba(0,0,0,0.08)',
+            transition: 'background-color 0.15s step-end',
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// Signal light — single square indicator with status color + effects
+function SignalLight({ mlStatus }) {
+  if (mlStatus === 'loading') {
+    // Blinking yellow
+    return (
+      <div className="relative w-3 h-3 flex items-center justify-center">
+        <div
+          className="w-3 h-3 bg-[#ca8a04]"
+          style={{ animation: 'signalBlink 0.8s step-end infinite' }}
+        />
+        <style>{`
+          @keyframes signalBlink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.2; }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  if (mlStatus === 'ready') {
+    // Solid green with halo
+    return (
+      <div className="relative w-3 h-3 flex items-center justify-center">
+        <div
+          className="absolute w-5 h-5 bg-green-600/20"
+          style={{ animation: 'signalHalo 2s ease-in-out infinite' }}
+        />
+        <div className="relative w-3 h-3 bg-green-600" />
+        <style>{`
+          @keyframes signalHalo {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.4); }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  // idle or failed — red
+  return <div className="w-3 h-3 bg-[#ff0000]" />;
+}
+
 export default function TopNav({ userProfile, onLogout, mlStatus, mlProgress }) {
   const renderMlBadge = () => {
     if (mlStatus === 'loading') {
       return (
-        <div className="flex items-center gap-2 text-xs font-bold font-mono uppercase tracking-tight text-black">
-          <span className="inline-block w-2 h-2 bg-[#ff0000] rounded-none animate-pulse"></span>
-          <div className="flex flex-col leading-tight">
-            <span>LOADING...</span>
-            {mlProgress.percent > 0 && (
-              <span className="text-[10px] tabular-nums">{mlProgress.percent}%</span>
-            )}
+        <div className="flex items-center gap-2">
+          <SignalLight mlStatus={mlStatus} />
+          <div className="flex flex-col gap-[3px]">
+            <SegmentedProgress percent={mlProgress.percent} />
+            <span className="text-[9px] font-bold font-mono uppercase tracking-wider text-black/40 tabular-nums">
+              {mlProgress.percent}%
+            </span>
           </div>
         </div>
       );
     }
 
     if (mlStatus === 'ready') {
-      return (
-        <span className="text-xs font-bold font-mono uppercase tracking-tight text-green-700">
-          AI:READY
-        </span>
-      );
+      return <SignalLight mlStatus={mlStatus} />;
     }
 
     if (mlStatus === 'failed') {
       return (
-        <span className="text-xs font-bold font-mono uppercase tracking-tight text-[#ff0000]">
-          RULE-BASED
-        </span>
+        <div className="flex items-center gap-2">
+          <SignalLight mlStatus={mlStatus} />
+          <span className="text-[9px] font-bold font-mono uppercase tracking-wider text-[#ff0000]">
+            RULE
+          </span>
+        </div>
       );
     }
 
-    return null;
+    return <SignalLight mlStatus="idle" />;
   };
 
   return (

@@ -24,6 +24,38 @@ export const setGmailToken = (token) => {
 };
 
 // Returns a batch of the 50 most recent inbox emails (metadata style)
+// Fetch metadata for a chunk of message IDs, filtering out failed responses
+const fetchMessageChunk = async (messageIds) => {
+    const batch = gapi.client.newBatch();
+    messageIds.forEach((id) => {
+        batch.add(gapi.client.gmail.users.messages.get({
+            userId: 'me',
+            id,
+            format: 'metadata',
+            metadataHeaders: ['From', 'Subject', 'Date', 'List-Unsubscribe'],
+        }), { id });
+    });
+
+    const batchResponse = await batch;
+    const succeeded = [];
+    const failed = [];
+
+    Object.keys(batchResponse.result).forEach((id) => {
+        const item = batchResponse.result[id];
+        if (item.result?.id) {
+            succeeded.push(item.result);
+        } else {
+            failed.push(id);
+        }
+    });
+
+    return { succeeded, failed };
+};
+
+const CHUNK_SIZE = 15;
+const MAX_RETRIES = 2;
+const RETRY_DELAY = 1500;
+
 export const fetchInboxMessages = async (pageToken = '') => {
     try {
         const response = await gapi.client.gmail.users.messages.list({
@@ -38,21 +70,30 @@ export const fetchInboxMessages = async (pageToken = '') => {
 
         if (messages.length === 0) return { messages: [], nextPageToken };
 
-        // Fetch the metadata for each message
-        const batch = gapi.client.newBatch();
-        messages.forEach((msg) => {
-            batch.add(gapi.client.gmail.users.messages.get({
-                userId: 'me',
-                id: msg.id,
-                format: 'metadata',
-                metadataHeaders: ['From', 'Subject', 'Date', 'List-Unsubscribe'],
-            }), { id: msg.id });
-        });
+        // Fetch metadata in small chunks to avoid 429 rate limiting
+        const allIds = messages.map((m) => m.id);
+        const allResults = [];
 
-        const batchResponse = await batch; // executes the batch
-        const detailedMessages = Object.keys(batchResponse.result).map((id) => batchResponse.result[id].result);
+        for (let i = 0; i < allIds.length; i += CHUNK_SIZE) {
+            const chunkIds = allIds.slice(i, i + CHUNK_SIZE);
+            let { succeeded, failed } = await fetchMessageChunk(chunkIds);
+            allResults.push(...succeeded);
 
-        return { messages: detailedMessages, nextPageToken };
+            // Retry failed IDs with backoff
+            for (let retry = 0; retry < MAX_RETRIES && failed.length > 0; retry++) {
+                await new Promise((r) => setTimeout(r, RETRY_DELAY * (retry + 1)));
+                const retryResult = await fetchMessageChunk(failed);
+                allResults.push(...retryResult.succeeded);
+                failed = retryResult.failed;
+            }
+
+            // Small pause between chunks to stay under rate limit
+            if (i + CHUNK_SIZE < allIds.length) {
+                await new Promise((r) => setTimeout(r, 300));
+            }
+        }
+
+        return { messages: allResults, nextPageToken };
     } catch (error) {
         console.error('Error fetching inbox messages:', error);
         throw error;
