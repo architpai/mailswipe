@@ -1,9 +1,8 @@
 import { pipeline, env } from '@xenova/transformers';
 
-// Serve models from local public/models/ directory
-env.localModelPath = '/models/';
-env.allowRemoteModels = false;
-env.allowLocalModels = true;
+// Download models from HuggingFace CDN, cache in browser
+env.allowRemoteModels = true;
+env.allowLocalModels = false;
 env.useBrowserCache = true;
 
 // Suppress ONNX Runtime warnings (benign "unused initializer" messages)
@@ -61,25 +60,28 @@ function withTimeout(promise, ms) {
     ]);
 }
 
-const MODEL_LOAD_TIMEOUT = 30000; // 30s for preload
-const MODEL_INFER_TIMEOUT = 10000; // 10s per email processing
+const MODEL_LOAD_TIMEOUT = 180000; // 3min for remote download
+const MODEL_INFER_TIMEOUT = 15000; // 15s per email processing
+
+let modelsResolved = false;
 
 // Preload models as soon as worker starts (don't wait for first email)
 async function preloadModels() {
     const classifier = await withTimeout(
         getClassificationPipeline(x => {
-            self.postMessage({ status: 'LOADING_CLASSIFIER', data: x });
+            if (!modelsResolved) self.postMessage({ status: 'LOADING_CLASSIFIER', data: x });
         }),
         MODEL_LOAD_TIMEOUT
     );
 
     const summarizer = await withTimeout(
         getSummarizationPipeline(x => {
-            self.postMessage({ status: 'LOADING_SUMMARIZER', data: x });
+            if (!modelsResolved) self.postMessage({ status: 'LOADING_SUMMARIZER', data: x });
         }),
         MODEL_LOAD_TIMEOUT
     );
 
+    modelsResolved = true;
     if (classifier || summarizer) {
         self.postMessage({ status: 'MODELS_LOADED' });
     } else {
@@ -130,9 +132,7 @@ self.addEventListener('message', async (event) => {
         try {
             // 1. Classification — timeout prevents hanging if model never loads
             const classifier = await withTimeout(
-                getClassificationPipeline(x => {
-                    self.postMessage({ status: 'LOADING_CLASSIFIER', data: x });
-                }),
+                getClassificationPipeline(() => {}),
                 MODEL_INFER_TIMEOUT
             );
 
@@ -150,9 +150,7 @@ self.addEventListener('message', async (event) => {
             // 2. Summarize (only for longer emails)
             if (inputString.length >= 80) {
                 const summarizer = await withTimeout(
-                    getSummarizationPipeline(x => {
-                        self.postMessage({ status: 'LOADING_SUMMARIZER', data: x });
-                    }),
+                    getSummarizationPipeline(() => {}),
                     MODEL_INFER_TIMEOUT
                 );
 

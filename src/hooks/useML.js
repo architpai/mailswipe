@@ -18,12 +18,17 @@ export function useML() {
             // Track per-file progress for overall calculation
             const fileProgress = {};
 
+            let resolved = false;
+
             worker.current.addEventListener('message', (e) => {
                 const { status, result, id, data } = e.data;
 
                 if (status === 'READY') {
                     setIsReady(true);
                 } else if (status === 'LOADING_CLASSIFIER' || status === 'LOADING_SUMMARIZER') {
+                    // Ignore late progress events after models resolved
+                    if (resolved) return;
+
                     setMlStatus('loading');
                     const isClassifier = status === 'LOADING_CLASSIFIER';
                     const stageLabel = isClassifier ? 'Classification model' : 'Summarization model';
@@ -53,9 +58,11 @@ export function useML() {
                         setMlProgress({ stage: stageLabel, percent: Math.min(99, overall), file: fileBasename });
                     }
                 } else if (status === 'MODELS_LOADED') {
+                    resolved = true;
                     setMlStatus('ready');
                     setMlProgress({ stage: 'Ready', percent: 100, file: '' });
                 } else if (status === 'MODELS_FAILED') {
+                    resolved = true;
                     setMlStatus('failed');
                     setMlProgress({ stage: 'Rule-based tagging', percent: 100, file: '' });
                 } else if (status === 'SUCCESS') {
