@@ -396,6 +396,7 @@ function App() {
               stats={stats}
               fetchError={fetchError}
               onRetry={loadMore}
+              dragEnabled={!selectedEmail}
             />
           )}
         </div>

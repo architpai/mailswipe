@@ -63,15 +63,11 @@ export default function DetailView({ email, onClose, onAction, onUnsubscribe }) 
 
   return (
     <AnimatePresence>
-      {/* Backdrop — blocks touch events from reaching cards underneath */}
       <motion.div
         className="fixed inset-0 z-50"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        onTouchStart={(e) => e.stopPropagation()}
-        onTouchMove={(e) => e.stopPropagation()}
-        onPointerDown={(e) => e.stopPropagation()}
       >
         <motion.div
           initial={{ y: '100%' }}
@@ -79,6 +75,7 @@ export default function DetailView({ email, onClose, onAction, onUnsubscribe }) 
           exit={{ y: '100%' }}
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
           className="absolute inset-0 flex flex-col bg-white sm:mt-16 sm:h-[calc(100vh-4rem)] sm:max-w-md sm:mx-auto border-t-[3px] border-black font-mono"
+          style={{ touchAction: 'auto' }}
         >
           {/* Header */}
           <div className="flex-none p-4 flex items-center justify-between bg-white border-b-[3px] border-black">
@@ -97,7 +94,10 @@ export default function DetailView({ email, onClose, onAction, onUnsubscribe }) 
           </div>
 
           {/* Content — min-h-0 is critical for flex scroll on mobile */}
-          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 md:p-6 bg-white -webkit-overflow-scrolling-touch">
+          <div
+            className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 md:p-6 bg-white"
+            style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y', overscrollBehavior: 'contain' }}
+          >
             <h1 className="text-lg font-black text-black mb-4 uppercase tracking-tight leading-tight">
               {email.subject}
             </h1>

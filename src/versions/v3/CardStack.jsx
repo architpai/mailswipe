@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useCallback, forwardRef } from 'react';
-import { motion, useMotionValue, useTransform, AnimatePresence, animate } from 'framer-motion';
+import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
 import Card from './Card';
 
 const SWIPE_MIN_DISTANCE = 120;
@@ -13,16 +13,8 @@ function swipeAngle(px, py) {
   return raw < 0 ? raw + 360 : raw;
 }
 
-// Dynamic exit based on direction — passed via framer-motion `custom` prop
-const cardExitVariant = (direction) => ({
-  x: direction === 'right' ? 600 : direction === 'left' ? -600 : 0,
-  y: direction === 'up' ? -500 : 0,
-  rotate: direction === 'right' ? 18 : direction === 'left' ? -18 : 0,
-  opacity: 0,
-  transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] },
-});
 
-const SwipeableCard = forwardRef(function SwipeableCard({ email, onSwipe, onOpenDetail, onSetDirection, onUnsubscribe }, ref) {
+const SwipeableCard = forwardRef(function SwipeableCard({ email, onSwipe, onOpenDetail, onUnsubscribe, dragEnabled = true }, ref) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const rotate = useTransform(x, [-300, 300], [-15, 15]);
@@ -52,19 +44,33 @@ const SwipeableCard = forwardRef(function SwipeableCard({ email, onSwipe, onOpen
   const longPressRef = useRef(null);
   const swiped = useRef(false);
 
-  const triggerSwipe = useCallback((direction) => {
+  // Fly the card off screen, then remove it from the list
+  const flyOut = useCallback((direction, velocityX = 0, velocityY = 0) => {
     if (swiped.current) return;
     swiped.current = true;
 
     const action = direction === 'right' ? 'keep' : direction === 'left' ? 'trash' : 'archive';
-    onSetDirection(direction);
-    onSwipe(email, action);
-  }, [email, onSwipe, onSetDirection]);
 
-  // Keyboard shortcuts — animate overlay, then trigger swipe
+    const exitX = direction === 'right' ? 600 : direction === 'left' ? -600 : 0;
+    const exitY = direction === 'up' ? -600 : 0;
+
+    animate(x, exitX, { type: 'spring', velocity: velocityX, stiffness: 80, damping: 20 });
+    animate(y, exitY, { type: 'spring', velocity: velocityY, stiffness: 80, damping: 20 });
+
+    // Remove from list quickly — card is already flying off the visible area
+    setTimeout(() => onSwipe(email, action), 150);
+  }, [email, onSwipe, x, y]);
+
+  // Spring back to center
+  const snapBack = useCallback(() => {
+    animate(x, 0, { type: 'spring', stiffness: 300, damping: 25 });
+    animate(y, 0, { type: 'spring', stiffness: 300, damping: 25 });
+  }, [x, y]);
+
+  // Keyboard shortcuts — animate overlay, then fly out
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (swiped.current) return;
+      if (swiped.current || !dragEnabled) return;
 
       let direction = null;
       switch (e.key) {
@@ -78,36 +84,30 @@ const SwipeableCard = forwardRef(function SwipeableCard({ email, onSwipe, onOpen
         default: return;
       }
 
-      // Animate motion values to flash the overlay
-      const targetX = direction === 'right' ? SWIPE_MIN_DISTANCE + 30 : direction === 'left' ? -(SWIPE_MIN_DISTANCE + 30) : 0;
-      const targetY = direction === 'up' ? -(SWIPE_MIN_DISTANCE + 30) : 0;
-
-      animate(x, targetX, { duration: 0.1, ease: 'easeOut' });
-      animate(y, targetY, { duration: 0.1, ease: 'easeOut' });
-
-      setTimeout(() => triggerSwipe(direction), 130);
+      flyOut(direction);
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [triggerSwipe, x, y, email, onOpenDetail]);
+  }, [flyOut, email, onOpenDetail, dragEnabled]);
 
   const handleDragEnd = useCallback((event, info) => {
-    const { offset } = info;
+    const { offset, velocity } = info;
     const dist = Math.sqrt(offset.x ** 2 + offset.y ** 2);
-    if (dist < SWIPE_MIN_DISTANCE) return;
+
+    if (dist < SWIPE_MIN_DISTANCE) { snapBack(); return; }
 
     const angle = swipeAngle(offset.x, offset.y);
-    if (angle > 229 && angle < 290) return; // straight-down dead zone
+    if (angle > 229 && angle < 290) { snapBack(); return; }
 
     if (angle <= KEEP_MAX_ANGLE || angle >= 290) {
-      triggerSwipe('right');
+      flyOut('right', velocity.x, velocity.y);
     } else if (angle <= ARCHIVE_MAX_ANGLE) {
-      triggerSwipe('up');
+      flyOut('up', velocity.x, velocity.y);
     } else if (angle <= 229) {
-      triggerSwipe('left');
+      flyOut('left', velocity.x, velocity.y);
     }
-  }, [triggerSwipe]);
+  }, [flyOut, snapBack]);
 
   const startLongPress = useCallback(() => {
     longPressRef.current = setTimeout(() => {
@@ -124,13 +124,11 @@ const SwipeableCard = forwardRef(function SwipeableCard({ email, onSwipe, onOpen
       ref={ref}
       className="absolute w-full h-[450px]"
       style={{ x, y, rotate, zIndex: 10 }}
-      drag
-      dragConstraints={{ top: 0, bottom: 0, left: 0, right: 0 }}
+      drag={dragEnabled}
       onDragEnd={handleDragEnd}
       onPointerDown={startLongPress}
       onPointerUp={cancelLongPress}
       onPointerMove={cancelLongPress}
-      exit={cardExitVariant}
     >
       <Card email={email} isTop={true} onUnsubscribe={onUnsubscribe} />
 
@@ -176,16 +174,7 @@ const SwipeableCard = forwardRef(function SwipeableCard({ email, onSwipe, onOpen
   );
 });
 
-export default function CardStack({ emails, onSwipe, onOpenDetail, onUnsubscribe, stats, fetchError, onRetry }) {
-  const exitDirectionRef = useRef('right');
-
-  const setDirection = useCallback((dir) => {
-    exitDirectionRef.current = dir;
-  }, []);
-
-  const handleSwipeWithDirection = useCallback((email, action) => {
-    onSwipe(email, action);
-  }, [onSwipe]);
+export default function CardStack({ emails, onSwipe, onOpenDetail, onUnsubscribe, stats, fetchError, onRetry, dragEnabled = true }) {
 
   if (!emails || emails.length === 0) {
     // Fetch error state
@@ -317,16 +306,14 @@ export default function CardStack({ emails, onSwipe, onOpenDetail, onUnsubscribe
       })}
 
       {/* Top card (swipeable) */}
-      <AnimatePresence mode="popLayout" custom={exitDirectionRef.current}>
-        <SwipeableCard
-          key={emails[0].id}
-          email={emails[0]}
-          onSwipe={handleSwipeWithDirection}
-          onOpenDetail={onOpenDetail}
-          onSetDirection={setDirection}
-          onUnsubscribe={onUnsubscribe}
-        />
-      </AnimatePresence>
+      <SwipeableCard
+        key={emails[0].id}
+        email={emails[0]}
+        onSwipe={onSwipe}
+        onOpenDetail={onOpenDetail}
+        onUnsubscribe={onUnsubscribe}
+        dragEnabled={dragEnabled}
+      />
     </div>
   );
 }
