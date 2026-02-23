@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import DOMPurify from 'dompurify';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchFullMessage } from '../../gmail/api';
+import { getActionLabel } from '../../hooks/useSettings';
 
 // Recursively search MIME parts for a given mimeType
 function findPart(part, mimeType) {
@@ -21,7 +22,7 @@ function decodeBody(data) {
   return decodeURIComponent(escape(atob(data.replace(/-/g, '+').replace(/_/g, '/'))));
 }
 
-export default function DetailView({ email, onClose, onAction, onUnsubscribe }) {
+export default function DetailView({ email, onClose, onAction, onUnsubscribe, settings }) {
   const [fullContentHtml, setFullContentHtml] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [loadImages, setLoadImages] = useState(false);
@@ -136,24 +137,28 @@ export default function DetailView({ email, onClose, onAction, onUnsubscribe }) 
 
           {/* Action buttons */}
           <div className="flex-none p-4 pb-8 sm:pb-4 border-t-[3px] border-black bg-white flex justify-between gap-2">
-            <button
-              onClick={() => onAction(email, 'trash')}
-              className="flex-1 py-3 bg-white text-black font-black border-[3px] border-black rounded-none flex items-center justify-center gap-1 hover:bg-[#ff0000] hover:text-white hover:border-[#ff0000] active:scale-95 transition-all font-mono text-xs uppercase tracking-tight"
-            >
-              TRASH
-            </button>
-            <button
-              onClick={() => onAction(email, 'archive')}
-              className="flex-1 py-3 bg-white text-black font-black border-[3px] border-black rounded-none flex items-center justify-center gap-1 hover:bg-blue-600 hover:text-white hover:border-blue-600 active:scale-95 transition-all font-mono text-xs uppercase tracking-tight"
-            >
-              ARCHIVE
-            </button>
-            <button
-              onClick={() => onAction(email, 'keep')}
-              className="flex-1 py-3 bg-white text-black font-black border-[3px] border-black rounded-none flex items-center justify-center gap-1 hover:bg-green-600 hover:text-white hover:border-green-600 active:scale-95 transition-all font-mono text-xs uppercase tracking-tight"
-            >
-              KEEP
-            </button>
+            {['left', 'up', 'right'].map((dir) => {
+              const actionConfig = settings.swipeActions[dir];
+              return (
+                <button
+                  key={dir}
+                  onClick={() => onAction(email, dir)}
+                  className="flex-1 py-3 bg-white text-black font-black border-[3px] border-black rounded-none flex items-center justify-center gap-1 active:scale-95 transition-all font-mono text-xs uppercase tracking-tight"
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = actionConfig.color;
+                    e.currentTarget.style.color = '#fff';
+                    e.currentTarget.style.borderColor = actionConfig.color;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = '#fff';
+                    e.currentTarget.style.color = '#000';
+                    e.currentTarget.style.borderColor = '#000';
+                  }}
+                >
+                  {getActionLabel(actionConfig)}
+                </button>
+              );
+            })}
           </div>
 
           {/* Unsubscribe */}
