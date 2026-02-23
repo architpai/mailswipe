@@ -94,9 +94,6 @@ function PredictionPills({ predictions, settings, modelReady }) {
     (predictions[a] || 0) > (predictions[b] || 0) ? a : b
   );
 
-  const getAbbrev = (actionConfig) =>
-    getActionLabel(actionConfig).substring(0, 3).toUpperCase();
-
   return (
     <div className="flex items-center gap-1.5 mb-3">
       {directions.map(dir => {
@@ -108,7 +105,7 @@ function PredictionPills({ predictions, settings, modelReady }) {
         return (
           <div
             key={dir}
-            className="flex items-center gap-1 px-1.5 py-0.5 font-mono"
+            className="flex items-center gap-1 px-1.5 py-0.5 font-mono truncate"
             style={{
               backgroundColor: actionConfig.color + (isMax ? '20' : '10'),
               border: `1.5px solid ${actionConfig.color}${isMax ? '60' : '25'}`,
@@ -119,7 +116,7 @@ function PredictionPills({ predictions, settings, modelReady }) {
               className="text-[9px] font-bold uppercase tracking-tight"
               style={{ color: actionConfig.color }}
             >
-              {getAbbrev(actionConfig)}
+              {getActionLabel(actionConfig).toUpperCase()}
             </span>
             <span
               className="text-[9px] font-black tabular-nums"
