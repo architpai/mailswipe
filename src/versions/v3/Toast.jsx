@@ -19,20 +19,22 @@ export default function Toast({ lastAction, onUndo, onDismiss }) {
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 50 }}
-          className="fixed bottom-20 sm:bottom-6 left-1/2 -translate-x-1/2 z-50 bg-black text-white px-4 py-3 rounded-none shadow-none border-none flex items-center justify-between gap-4 w-11/12 max-w-sm font-mono"
+          className="fixed bottom-20 sm:bottom-6 left-0 right-0 z-50 flex justify-center px-4 font-mono"
         >
-          <span className="font-bold text-xs uppercase tracking-tight truncate min-w-0">
-            {getActionPastTense(lastAction.actionConfig)}
-          </span>
-          <button
-            onClick={() => {
-              onUndo(lastAction);
-              onDismiss();
-            }}
-            className="flex-none font-black text-xs uppercase tracking-tight text-[#ff0000] border-[2px] border-[#ff0000] px-3 py-1 rounded-none bg-transparent hover:bg-[#ff0000] hover:text-white transition-colors cursor-pointer font-mono"
-          >
-            UNDO
-          </button>
+          <div className="bg-black text-white px-4 py-3 flex items-center gap-3 w-full max-w-sm">
+            <span className="font-bold text-xs uppercase tracking-tight truncate min-w-0 flex-1">
+              {getActionPastTense(lastAction.actionConfig)}
+            </span>
+            <button
+              onClick={() => {
+                onUndo(lastAction);
+                onDismiss();
+              }}
+              className="flex-none font-black text-xs uppercase tracking-tight text-[#ff0000] border-[2px] border-[#ff0000] px-3 py-1 bg-transparent hover:bg-[#ff0000] hover:text-white transition-colors cursor-pointer font-mono"
+            >
+              UNDO
+            </button>
+          </div>
         </motion.div>
       )}
     </AnimatePresence>
