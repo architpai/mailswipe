@@ -1,46 +1,34 @@
 import React from 'react';
+import { getActionLabel } from '../../hooks/useSettings';
 
-export default function Sidebar({ stats }) {
-  const { kept = 0, trashed = 0, archived = 0 } = stats || {};
+export default function Sidebar({ stats, settings }) {
+  const directions = [
+    { key: 'left', symbol: '←' },
+    { key: 'up', symbol: '↑' },
+    { key: 'right', symbol: '→' },
+  ];
 
   return (
     <div className="w-full max-w-md mx-auto bg-white flex items-stretch mb-4 select-none font-mono border-[3px] border-black">
-      {/* Trashed — left (swipe left) */}
-      <div className="flex-1 flex items-center justify-center gap-2 py-3">
-        <div className="w-3 h-3 bg-[#ff0000] flex-none" />
-        <div className="flex flex-col">
-          <span className="text-xl font-black text-black tabular-nums leading-none">
-            {trashed}
-          </span>
-          <span className="text-[9px] text-black/40 font-bold uppercase tracking-widest">TRASHED</span>
-        </div>
-      </div>
-
-      <div className="border-l-[2px] border-black/15" />
-
-      {/* Archived — center (swipe up) */}
-      <div className="flex-1 flex items-center justify-center gap-2 py-3">
-        <div className="w-3 h-3 bg-[#2563eb] flex-none" />
-        <div className="flex flex-col">
-          <span className="text-xl font-black text-black tabular-nums leading-none">
-            {archived}
-          </span>
-          <span className="text-[9px] text-black/40 font-bold uppercase tracking-widest">ARCHIVED</span>
-        </div>
-      </div>
-
-      <div className="border-l-[2px] border-black/15" />
-
-      {/* Kept — right (swipe right) */}
-      <div className="flex-1 flex items-center justify-center gap-2 py-3">
-        <div className="w-3 h-3 bg-[#16a34a] flex-none" />
-        <div className="flex flex-col">
-          <span className="text-xl font-black text-black tabular-nums leading-none">
-            {kept}
-          </span>
-          <span className="text-[9px] text-black/40 font-bold uppercase tracking-widest">KEPT</span>
-        </div>
-      </div>
+      {directions.map((dir, i) => {
+        const actionConfig = settings.swipeActions[dir.key];
+        return (
+          <React.Fragment key={dir.key}>
+            {i > 0 && <div className="border-l-[2px] border-black/15" />}
+            <div className="flex-1 flex items-center justify-center gap-2 py-3">
+              <div className="w-3 h-3 flex-none" style={{ backgroundColor: actionConfig.color }} />
+              <div className="flex flex-col">
+                <span className="text-xl font-black text-black tabular-nums leading-none">
+                  {stats[dir.key] || 0}
+                </span>
+                <span className="text-[9px] text-black/40 font-bold uppercase tracking-widest">
+                  {getActionLabel(actionConfig).toUpperCase()}
+                </span>
+              </div>
+            </div>
+          </React.Fragment>
+        );
+      })}
     </div>
   );
 }
