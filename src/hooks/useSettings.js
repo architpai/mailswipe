@@ -30,6 +30,7 @@ export const DEFAULT_SETTINGS = {
         up:    { type: 'archive', color: '#2563eb' },
         right: { type: 'label',   color: '#16a34a', labelName: 'Kept' },
     },
+    showDebugPills: false,
 };
 
 export function getActionLabel(actionConfig) {

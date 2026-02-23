@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import TopNav from './TopNav';
 import Sidebar from './Sidebar';
@@ -10,6 +10,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useEmails } from '../../hooks/useEmails';
 import { useML } from '../../hooks/useML';
 import { useSettings } from '../../hooks/useSettings';
+import { useSwipePredictor } from '../../hooks/useSwipePredictor';
 
 // ── Demo sequence for landing page ──────────────────────────────────
 const DEMO_STEPS = [
@@ -52,6 +53,34 @@ const DEMO_STEPS = [
     labelColor: '#2563eb',
     callout: 'SAVE FOR LATER. INSTANTLY.',
   },
+  {
+    from: 'DEALS@MEGASTORE.COM',
+    subject: 'FLASH SALE 80% OFF',
+    snippet: 'UNBELIEVABLE DEALS ON ELECTRONICS, FASHION AND MORE...',
+    tag: 'SPAM',
+    direction: 'left',
+    exitX: -600,
+    exitY: 0,
+    exitRotate: -18,
+    label: '← TRASH',
+    labelColor: '#ff0000',
+    callout: 'LEARNS AS YOU SWIPE.',
+    tintColor: 'rgb(246, 217, 217)',
+  },
+  {
+    from: 'ALEX',
+    subject: 'PARTY THIS SATURDAY!',
+    snippet: 'HEY! THROWING A PARTY AT MY PLACE THIS WEEKEND. YOU IN?',
+    tag: 'PERSONAL',
+    direction: 'right',
+    exitX: 600,
+    exitY: 0,
+    exitRotate: 18,
+    label: 'KEEP →',
+    labelColor: '#16a34a',
+    callout: 'SUGGESTS ACTIONS. YOU STAY IN CONTROL.',
+    tintColor: 'rgb(216, 245, 228)',
+  },
 ];
 
 const PAUSE_STEP = {
@@ -65,8 +94,8 @@ const PAUSE_STEP = {
 function DemoCard({ step, isSwiping }) {
   return (
     <motion.div
-      className="absolute w-[280px] sm:w-[320px] border-[3px] border-black bg-white p-5 select-none"
-      style={{ fontFamily: 'monospace' }}
+      className="absolute w-[280px] sm:w-[320px] border-[3px] border-black p-5 select-none"
+      style={{ fontFamily: 'monospace', backgroundColor: step.tintColor || '#ffffff' }}
       initial={{ x: 0, y: 30, rotate: 0, opacity: 0, scale: 0.95 }}
       animate={{ x: 0, y: 0, rotate: 0, opacity: 1, scale: 1 }}
       exit={{
@@ -338,12 +367,20 @@ function App() {
   const { emails, setEmails, handleAction, undoAction, stats, isLoading, fetchError, loadMore } = useEmails(token);
   const { isReady, mlStatus, mlProgress, analyzeEmails } = useML();
   const { settings, updateSettings, resetSettings } = useSettings();
+  const { predict, train, modelReady } = useSwipePredictor();
   const [showSettings, setShowSettings] = useState(false);
 
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [lastAction, setLastAction] = useState(null);
   const emailsRef = useRef(emails);
   emailsRef.current = emails;
+
+  // Predict swipe action for the top email (recomputes only when top email changes)
+  const topEmail = emails.length > 0 ? emails[0] : null;
+  const predictions = useMemo(
+    () => (topEmail ? predict(topEmail) : null),
+    [topEmail, predict]
+  );
 
   // Only trigger ML analysis when new emails arrive (length changes), not on every re-render
   useEffect(() => {
@@ -357,12 +394,15 @@ function App() {
     const actionConfig = settings.swipeActions[direction];
     handleAction(email, direction, actionConfig);
     setLastAction({ email, direction, actionConfig });
+    // Note: undo does not reverse training — a single reversed sample has diminishing impact
+    train(email, direction);
   };
 
   const handleActionDetail = (email, direction) => {
     const actionConfig = settings.swipeActions[direction];
     handleAction(email, direction, actionConfig);
     setLastAction({ email, direction, actionConfig });
+    train(email, direction);
     setSelectedEmail(null);
   };
 
@@ -407,6 +447,8 @@ function App() {
               onRetry={loadMore}
               dragEnabled={!selectedEmail}
               settings={settings}
+              predictions={predictions}
+              modelReady={modelReady}
             />
           )}
         </div>
