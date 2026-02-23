@@ -183,11 +183,12 @@ function DirectionSection({ direction, config, onConfigChange }) {
 }
 
 export default function Settings({ settings, onSave, onReset, onClose }) {
-  const [draft, setDraft] = useState(() => {
-    // Deep clone the swipeActions from current settings
-    return JSON.parse(JSON.stringify(settings.swipeActions));
-  });
+  const [draft, setDraft] = useState(() => ({
+    swipeActions: JSON.parse(JSON.stringify(settings.swipeActions)),
+    showDebugPills: settings.showDebugPills ?? false,
+  }));
   const [error, setError] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
     const handleEsc = (e) => {
@@ -200,24 +201,25 @@ export default function Settings({ settings, onSave, onReset, onClose }) {
   const handleDirectionChange = (dirKey, newConfig) => {
     setDraft((prev) => ({
       ...prev,
-      [dirKey]: newConfig,
+      swipeActions: {
+        ...prev.swipeActions,
+        [dirKey]: newConfig,
+      },
     }));
     setError('');
   };
 
   const handleSave = () => {
-    // Validate: label actions must have a labelName
     for (const dir of DIRECTION_CONFIG) {
-      const cfg = draft[dir.key];
+      const cfg = draft.swipeActions[dir.key];
       if (cfg.type === 'label' && (!cfg.labelName || cfg.labelName.trim() === '')) {
         setError(`${dir.label} has Custom Label selected but no label name.`);
         return;
       }
     }
 
-    // Validate: no two directions share the same action+label combo
     const combos = DIRECTION_CONFIG.map((dir) => {
-      const cfg = draft[dir.key];
+      const cfg = draft.swipeActions[dir.key];
       const combo = cfg.type === 'label' ? `label:${cfg.labelName.trim().toLowerCase()}` : cfg.type;
       return { dir: dir.label, combo };
     });
@@ -231,12 +233,15 @@ export default function Settings({ settings, onSave, onReset, onClose }) {
     }
 
     setError('');
-    onSave({ ...settings, swipeActions: draft });
+    onSave({ ...settings, swipeActions: draft.swipeActions, showDebugPills: draft.showDebugPills });
     onClose();
   };
 
   const handleReset = () => {
-    setDraft(JSON.parse(JSON.stringify(DEFAULT_SETTINGS.swipeActions)));
+    setDraft({
+      swipeActions: JSON.parse(JSON.stringify(DEFAULT_SETTINGS.swipeActions)),
+      showDebugPills: DEFAULT_SETTINGS.showDebugPills ?? false,
+    });
     setError('');
   };
 
@@ -278,10 +283,51 @@ export default function Settings({ settings, onSave, onReset, onClose }) {
               <DirectionSection
                 key={dir.key}
                 direction={dir}
-                config={draft[dir.key]}
+                config={draft.swipeActions[dir.key]}
                 onConfigChange={(newConfig) => handleDirectionChange(dir.key, newConfig)}
               />
             ))}
+
+            {/* Advanced settings — collapsible */}
+            <div className="mt-2 border-t-[2px] border-black/10 pt-4">
+              <button
+                type="button"
+                onClick={() => setShowAdvanced(prev => !prev)}
+                className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-black/40 hover:text-black/60 transition-colors bg-transparent border-none cursor-pointer font-mono p-0"
+              >
+                <span>{showAdvanced ? '−' : '+'}</span>
+                <span>ADVANCED</span>
+              </button>
+
+              {showAdvanced && (
+                <div className="mt-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+                        SHOW CONFIDENCE DEBUG
+                      </div>
+                      <div className="text-[9px] uppercase tracking-wider text-black/30 mt-0.5">
+                        DISPLAY PREDICTION PILLS ON CARDS
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDraft(prev => ({ ...prev, showDebugPills: !prev.showDebugPills }))}
+                      className="flex-none w-10 h-5 border-[2px] border-black cursor-pointer p-0 transition-colors"
+                      style={{ backgroundColor: draft.showDebugPills ? '#000' : '#fff' }}
+                    >
+                      <div
+                        className="w-3 h-3 transition-transform"
+                        style={{
+                          backgroundColor: draft.showDebugPills ? '#fff' : '#000',
+                          transform: draft.showDebugPills ? 'translateX(18px)' : 'translateX(2px)',
+                        }}
+                      />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Footer */}
