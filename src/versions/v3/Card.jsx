@@ -134,6 +134,27 @@ function PredictionPills({ predictions, settings, modelReady }) {
   );
 }
 
+const CONFIDENCE_THRESHOLD = 0.8;
+const MAX_TINT_OPACITY = 0.12;
+
+function computeTintColor(predictions, settings) {
+  if (!predictions || !settings) return null;
+  const directions = ['left', 'up', 'right'];
+  let maxDir = directions[0];
+  let maxConf = predictions[directions[0]] || 0;
+  for (const dir of directions) {
+    const conf = predictions[dir] || 0;
+    if (conf > maxConf) {
+      maxConf = conf;
+      maxDir = dir;
+    }
+  }
+  if (maxConf < CONFIDENCE_THRESHOLD) return null;
+  const opacity = ((maxConf - CONFIDENCE_THRESHOLD) / (1 - CONFIDENCE_THRESHOLD)) * MAX_TINT_OPACITY;
+  const color = settings.swipeActions[maxDir].color;
+  return color + Math.round(opacity * 255).toString(16).padStart(2, '0');
+}
+
 export default function Card({ email, isTop, onUnsubscribe, predictions, settings, modelReady }) {
   if (!email) return null;
 
@@ -148,14 +169,17 @@ export default function Card({ email, isTop, onUnsubscribe, predictions, setting
     .join('')
     .toUpperCase();
 
+  const tintColor = isTop ? computeTintColor(predictions, settings) : null;
+
   return (
     <div
-      className={`w-full h-full border-[3px] border-black rounded-none shadow-none p-5 flex flex-col justify-between overflow-hidden bg-white font-mono
+      className={`w-full h-full border-[3px] border-black rounded-none shadow-none p-5 flex flex-col justify-between overflow-hidden font-mono
         ${isTop ? '' : 'opacity-80'}`}
+      style={{ backgroundColor: tintColor || '#ffffff' }}
     >
       <div>
         {/* Prediction confidence pills — only on top card */}
-        {isTop && predictions && (
+        {isTop && predictions && settings?.showDebugPills && (
           <PredictionPills predictions={predictions} settings={settings} modelReady={modelReady} />
         )}
 
