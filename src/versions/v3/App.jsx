@@ -10,6 +10,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useEmails } from '../../hooks/useEmails';
 import { useML } from '../../hooks/useML';
 import { useSettings } from '../../hooks/useSettings';
+import { useSwipePredictor } from '../../hooks/useSwipePredictor';
 
 // ── Demo sequence for landing page ──────────────────────────────────
 const DEMO_STEPS = [
@@ -338,12 +339,17 @@ function App() {
   const { emails, setEmails, handleAction, undoAction, stats, isLoading, fetchError, loadMore } = useEmails(token);
   const { isReady, mlStatus, mlProgress, analyzeEmails } = useML();
   const { settings, updateSettings, resetSettings } = useSettings();
+  const { predict, train, modelReady } = useSwipePredictor();
   const [showSettings, setShowSettings] = useState(false);
 
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [lastAction, setLastAction] = useState(null);
   const emailsRef = useRef(emails);
   emailsRef.current = emails;
+
+  // Predict swipe action for the top email
+  const topEmail = emails.length > 0 ? emails[0] : null;
+  const predictions = topEmail ? predict(topEmail) : null;
 
   // Only trigger ML analysis when new emails arrive (length changes), not on every re-render
   useEffect(() => {
@@ -357,12 +363,14 @@ function App() {
     const actionConfig = settings.swipeActions[direction];
     handleAction(email, direction, actionConfig);
     setLastAction({ email, direction, actionConfig });
+    train(email, direction);
   };
 
   const handleActionDetail = (email, direction) => {
     const actionConfig = settings.swipeActions[direction];
     handleAction(email, direction, actionConfig);
     setLastAction({ email, direction, actionConfig });
+    train(email, direction);
     setSelectedEmail(null);
   };
 
@@ -407,6 +415,8 @@ function App() {
               onRetry={loadMore}
               dragEnabled={!selectedEmail}
               settings={settings}
+              predictions={predictions}
+              modelReady={modelReady}
             />
           )}
         </div>
