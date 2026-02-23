@@ -72,7 +72,77 @@ function MlTagBadge({ mlTag }) {
   );
 }
 
-export default function Card({ email, isTop, onUnsubscribe }) {
+function PredictionPills({ predictions, settings, modelReady }) {
+  if (!predictions || !settings) return null;
+
+  // Before model is ready, show learning indicator
+  if (!modelReady) {
+    return (
+      <div className="flex items-center justify-center mb-3">
+        <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-black/30 font-mono">
+          LEARNING...
+        </span>
+      </div>
+    );
+  }
+
+  const directions = ['left', 'up', 'right'];
+
+  // Find highest confidence direction
+  const maxDir = directions.reduce((a, b) =>
+    (predictions[a] || 0) > (predictions[b] || 0) ? a : b
+  );
+
+  // Build abbreviated label (first 3 chars uppercase)
+  const getAbbrev = (actionConfig) => {
+    let name;
+    if (actionConfig.type === 'label') {
+      name = actionConfig.labelName || 'Label';
+    } else {
+      const labels = { trash: 'Trash', archive: 'Archive', star: 'Star', read: 'Read', spam: 'Spam' };
+      name = labels[actionConfig.type] || actionConfig.type;
+    }
+    return name.substring(0, 3).toUpperCase();
+  };
+
+  return (
+    <div className="flex items-center gap-1.5 mb-3">
+      {directions.map(dir => {
+        const actionConfig = settings.swipeActions[dir];
+        const confidence = predictions[dir] || 0;
+        const isMax = dir === maxDir;
+        const pct = Math.round(confidence * 100);
+
+        return (
+          <div
+            key={dir}
+            className="flex items-center gap-1 px-1.5 py-0.5 font-mono"
+            style={{
+              backgroundColor: actionConfig.color + (isMax ? '20' : '10'),
+              border: `1.5px solid ${actionConfig.color}${isMax ? '60' : '25'}`,
+              opacity: isMax ? 1 : 0.6,
+            }}
+          >
+            <span
+              className="text-[9px] font-bold uppercase tracking-tight"
+              style={{ color: actionConfig.color }}
+            >
+              {getAbbrev(actionConfig)}
+            </span>
+            <span
+              className="text-[9px] font-black tabular-nums"
+              style={{ color: actionConfig.color }}
+            >
+              {pct}%
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function Card({ email, isTop, onUnsubscribe, predictions, settings, modelReady }) {
   if (!email) return null;
 
   const { from, subject, date, snippet, mlTag, mlSummary, unsubscribeLink } = email;
@@ -92,6 +162,11 @@ export default function Card({ email, isTop, onUnsubscribe }) {
         ${isTop ? '' : 'opacity-80'}`}
     >
       <div>
+        {/* Prediction confidence pills — only on top card */}
+        {isTop && predictions && (
+          <PredictionPills predictions={predictions} settings={settings} modelReady={modelReady} />
+        )}
+
         {/* Sender row — prominent, with initial badge */}
         <div className="flex items-start gap-3 mb-3">
           <div className="flex-none w-9 h-9 border-[2px] border-black flex items-center justify-center bg-black text-white text-xs font-black tracking-tight">
