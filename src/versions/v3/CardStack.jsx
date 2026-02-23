@@ -15,7 +15,7 @@ function swipeAngle(px, py) {
 }
 
 
-const SwipeableCard = forwardRef(function SwipeableCard({ email, onSwipe, onOpenDetail, onUnsubscribe, dragEnabled = true, settings }, ref) {
+const SwipeableCard = forwardRef(function SwipeableCard({ email, onSwipe, onOpenDetail, onUnsubscribe, dragEnabled = true, settings, predictions, modelReady }, ref) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const rotate = useTransform(x, [-300, 300], [-15, 15]);
@@ -129,7 +129,7 @@ const SwipeableCard = forwardRef(function SwipeableCard({ email, onSwipe, onOpen
       onPointerUp={cancelLongPress}
       onPointerMove={cancelLongPress}
     >
-      <Card email={email} isTop={true} onUnsubscribe={onUnsubscribe} />
+      <Card email={email} isTop={true} onUnsubscribe={onUnsubscribe} predictions={predictions} settings={settings} modelReady={modelReady} />
 
       {/* Right swipe overlay */}
       <motion.div
@@ -164,7 +164,7 @@ const SwipeableCard = forwardRef(function SwipeableCard({ email, onSwipe, onOpen
   );
 });
 
-export default function CardStack({ emails, onSwipe, onOpenDetail, onUnsubscribe, stats, fetchError, onRetry, dragEnabled = true, settings }) {
+export default function CardStack({ emails, onSwipe, onOpenDetail, onUnsubscribe, stats, fetchError, onRetry, dragEnabled = true, settings, predictions, modelReady }) {
 
   if (!emails || emails.length === 0) {
     // Fetch error state
@@ -304,6 +304,8 @@ export default function CardStack({ emails, onSwipe, onOpenDetail, onUnsubscribe
         onUnsubscribe={onUnsubscribe}
         dragEnabled={dragEnabled}
         settings={settings}
+        predictions={predictions}
+        modelReady={modelReady}
       />
     </div>
   );
