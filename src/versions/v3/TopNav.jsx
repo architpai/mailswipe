@@ -87,7 +87,7 @@ export default function TopNav({ userProfile, onLogout, mlStatus, mlProgress, on
         <div className="flex items-center gap-2">
           <SignalLight mlStatus={mlStatus} />
           <span className="text-[9px] font-bold font-mono uppercase tracking-wider text-black/40">
-            AI ON
+            AI: READY
           </span>
         </div>
       );
@@ -108,7 +108,7 @@ export default function TopNav({ userProfile, onLogout, mlStatus, mlProgress, on
       <div className="flex items-center gap-2">
         <SignalLight mlStatus="idle" />
         <span className="text-[9px] font-bold font-mono uppercase tracking-wider text-black/40">
-          AI OFF
+          AI: IDLE
         </span>
       </div>
     );
