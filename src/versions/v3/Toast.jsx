@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getActionPastTense } from '../../hooks/useSettings';
 
 export default function Toast({ lastAction, onUndo, onDismiss }) {
   useEffect(() => {
@@ -21,7 +22,7 @@ export default function Toast({ lastAction, onUndo, onDismiss }) {
           className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-black text-white px-4 py-3 rounded-none shadow-none border-none flex items-center justify-between gap-4 w-11/12 max-w-sm font-mono"
         >
           <span className="font-bold text-xs uppercase tracking-tight">
-            EMAIL {lastAction.action === 'keep' ? 'KEPT' : lastAction.action === 'trash' ? 'TRASHED' : lastAction.action === 'archive' ? 'ARCHIVED' : lastAction.action.toUpperCase()}
+            EMAIL {getActionPastTense(lastAction.actionConfig)}
           </span>
           <button
             onClick={() => {

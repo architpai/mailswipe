@@ -1,29 +1,29 @@
 import { useState, useCallback, useEffect } from 'react';
-import { fetchInboxMessages, archiveMessage, trashMessage, keepMessage, untrashMessage, unarchiveMessage, unkeepMessage, ensureMailSwipeLabel } from '../gmail/api';
+import {
+    fetchInboxMessages,
+    archiveMessage, trashMessage, keepMessage,
+    untrashMessage, unarchiveMessage, unkeepMessage,
+    starMessage, unstarMessage,
+    markReadMessage, unmarkReadMessage,
+    spamMessage, unspamMessage,
+    ensureMailSwipeLabel,
+} from '../gmail/api';
 import { parseEmailHeaders } from '../utils/parser';
 
 export function useEmails(token) {
     const [emails, setEmails] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [pageToken, setPageToken] = useState(null);
-    const [stats, setStats] = useState({ kept: 0, trashed: 0, archived: 0, total: 0 });
-    const [keepLabelId, setKeepLabelId] = useState(null);
+    const [stats, setStats] = useState({ left: 0, up: 0, right: 0, total: 0 });
     const [fetchError, setFetchError] = useState(null);
 
     // Reset all state when token changes (new login or logout)
     useEffect(() => {
         setEmails([]);
         setPageToken(null);
-        setStats({ kept: 0, trashed: 0, archived: 0, total: 0 });
+        setStats({ left: 0, up: 0, right: 0, total: 0 });
         setFetchError(null);
     }, [token]);
-
-    // Initialize labels once
-    useEffect(() => {
-        if (token && !keepLabelId) {
-            ensureMailSwipeLabel().then(id => setKeepLabelId(id)).catch(console.error);
-        }
-    }, [token, keepLabelId]);
 
     const loadMore = useCallback(async () => {
         if (!token || isLoading) return;
@@ -60,46 +60,78 @@ export function useEmails(token) {
         }
     }, [emails.length, pageToken, isLoading, token, loadMore]);
 
-    const handleAction = async (email, action) => {
-        // Optimistic UI update
+    const handleAction = async (email, direction, actionConfig) => {
+        // Optimistic UI update — remove from triage list
         setEmails(prev => prev.filter(e => e.id !== email.id));
 
         setStats(prev => ({
             ...prev,
-            [action + 'ed']: (prev[action + 'ed'] || 0) + 1,
-            total: prev.total + 1
+            [direction]: (prev[direction] || 0) + 1,
+            total: prev.total + 1,
         }));
 
         try {
-            if (action === 'keep') {
-                if (!keepLabelId) throw new Error('Keep label ID not ready');
-                await keepMessage(email.id, keepLabelId);
-            } else if (action === 'trash') {
-                await trashMessage(email.id);
-            } else if (action === 'archive') {
-                await archiveMessage(email.id);
+            switch (actionConfig.type) {
+                case 'trash':
+                    await trashMessage(email.id);
+                    break;
+                case 'archive':
+                    await archiveMessage(email.id);
+                    break;
+                case 'label': {
+                    const labelId = await ensureMailSwipeLabel(actionConfig.labelName || 'Kept');
+                    await keepMessage(email.id, labelId);
+                    break;
+                }
+                case 'star':
+                    await starMessage(email.id);
+                    break;
+                case 'read':
+                    await markReadMessage(email.id);
+                    break;
+                case 'spam':
+                    await spamMessage(email.id);
+                    break;
+                default:
+                    console.warn(`Unknown action type: ${actionConfig.type}`);
             }
         } catch (error) {
-            console.error(`Failed to ${action} message ${email.id}`, error);
-            // Ideally show toast error & queue re-add
+            console.error(`Failed to ${actionConfig.type} message ${email.id}`, error);
         }
     };
 
-    const undoAction = async (email, action) => {
+    const undoAction = async (email, direction, actionConfig) => {
         setEmails(prev => [email, ...prev]);
         setStats(prev => ({
             ...prev,
-            [action + 'ed']: Math.max(0, prev[action + 'ed'] - 1),
-            total: Math.max(0, prev.total - 1)
+            [direction]: Math.max(0, (prev[direction] || 0) - 1),
+            total: Math.max(0, prev.total - 1),
         }));
+
         try {
-            if (action === 'keep') {
-                if (!keepLabelId) throw new Error('Keep label ID not ready');
-                await unkeepMessage(email.id, keepLabelId);
-            } else if (action === 'trash') {
-                await untrashMessage(email.id);
-            } else if (action === 'archive') {
-                await unarchiveMessage(email.id);
+            switch (actionConfig.type) {
+                case 'trash':
+                    await untrashMessage(email.id);
+                    break;
+                case 'archive':
+                    await unarchiveMessage(email.id);
+                    break;
+                case 'label': {
+                    const labelId = await ensureMailSwipeLabel(actionConfig.labelName || 'Kept');
+                    await unkeepMessage(email.id, labelId);
+                    break;
+                }
+                case 'star':
+                    await unstarMessage(email.id);
+                    break;
+                case 'read':
+                    await unmarkReadMessage(email.id);
+                    break;
+                case 'spam':
+                    await unspamMessage(email.id);
+                    break;
+                default:
+                    console.warn(`Unknown undo action type: ${actionConfig.type}`);
             }
         } catch (err) {
             console.error('Undo failed:', err);

@@ -152,45 +152,105 @@ export const unkeepMessage = async (id, keepLabelId) => {
     return gapi.client.gmail.users.messages.modify({ userId: 'me', id, addLabelIds: ['INBOX'], removeLabelIds: [keepLabelId] });
 };
 
-// Ensuring the Keep label exists
-export const ensureMailSwipeLabel = async () => {
-    const PARENT_LABEL_NAME = 'MailSwipe';
-    const KEPT_LABEL_NAME = 'MailSwipe/Kept';
+export const starMessage = async (id) => {
+  return gapi.client.gmail.users.messages.modify({
+    userId: 'me',
+    id,
+    addLabelIds: ['STARRED'],
+  });
+};
 
-    try {
-        const { result } = await gapi.client.gmail.users.labels.list({ userId: 'me' });
-        const labels = result.labels || [];
+export const unstarMessage = async (id) => {
+  return gapi.client.gmail.users.messages.modify({
+    userId: 'me',
+    id,
+    removeLabelIds: ['STARRED'],
+  });
+};
 
-        let parentLabel = labels.find(l => l.name === PARENT_LABEL_NAME);
-        let keptLabel = labels.find(l => l.name === KEPT_LABEL_NAME);
+export const markReadMessage = async (id) => {
+  return gapi.client.gmail.users.messages.modify({
+    userId: 'me',
+    id,
+    removeLabelIds: ['UNREAD'],
+  });
+};
 
-        if (!parentLabel) {
-            const response = await gapi.client.gmail.users.labels.create({
-                userId: 'me',
-                resource: {
-                    name: PARENT_LABEL_NAME,
-                    labelListVisibility: 'labelShow',
-                    messageListVisibility: 'show',
-                }
-            });
-            parentLabel = response.result;
-        }
+export const unmarkReadMessage = async (id) => {
+  return gapi.client.gmail.users.messages.modify({
+    userId: 'me',
+    id,
+    addLabelIds: ['UNREAD'],
+  });
+};
 
-        if (!keptLabel) {
-            const response = await gapi.client.gmail.users.labels.create({
-                userId: 'me',
-                resource: {
-                    name: KEPT_LABEL_NAME,
-                    labelListVisibility: 'labelShow',
-                    messageListVisibility: 'show',
-                }
-            });
-            keptLabel = response.result;
-        }
+export const spamMessage = async (id) => {
+  return gapi.client.gmail.users.messages.modify({
+    userId: 'me',
+    id,
+    addLabelIds: ['SPAM'],
+    removeLabelIds: ['INBOX'],
+  });
+};
 
-        return keptLabel.id;
-    } catch (error) {
-        console.error('Failed to ensure labels:', error);
-        throw error;
-    }
+export const unspamMessage = async (id) => {
+  return gapi.client.gmail.users.messages.modify({
+    userId: 'me',
+    id,
+    removeLabelIds: ['SPAM'],
+    addLabelIds: ['INBOX'],
+  });
+};
+
+// Ensuring MailSwipe labels exist
+const PARENT_LABEL_NAME = 'MailSwipe';
+const labelIdCache = {};
+
+const ensureParentLabel = async () => {
+  if (labelIdCache[PARENT_LABEL_NAME]) return labelIdCache[PARENT_LABEL_NAME];
+
+  const { result } = await gapi.client.gmail.users.labels.list({ userId: 'me' });
+  const labels = result.labels || [];
+
+  let parentLabel = labels.find(l => l.name === PARENT_LABEL_NAME);
+  if (!parentLabel) {
+    const response = await gapi.client.gmail.users.labels.create({
+      userId: 'me',
+      resource: {
+        name: PARENT_LABEL_NAME,
+        labelListVisibility: 'labelShow',
+        messageListVisibility: 'show',
+      }
+    });
+    parentLabel = response.result;
+  }
+
+  labelIdCache[PARENT_LABEL_NAME] = parentLabel.id;
+  return parentLabel.id;
+};
+
+export const ensureMailSwipeLabel = async (childName = 'Kept') => {
+  const fullName = `${PARENT_LABEL_NAME}/${childName}`;
+  if (labelIdCache[fullName]) return labelIdCache[fullName];
+
+  await ensureParentLabel();
+
+  const { result } = await gapi.client.gmail.users.labels.list({ userId: 'me' });
+  const labels = result.labels || [];
+
+  let childLabel = labels.find(l => l.name === fullName);
+  if (!childLabel) {
+    const response = await gapi.client.gmail.users.labels.create({
+      userId: 'me',
+      resource: {
+        name: fullName,
+        labelListVisibility: 'labelShow',
+        messageListVisibility: 'show',
+      }
+    });
+    childLabel = response.result;
+  }
+
+  labelIdCache[fullName] = childLabel.id;
+  return childLabel.id;
 };

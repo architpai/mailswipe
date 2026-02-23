@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useCallback, forwardRef } from 'react';
 import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
 import Card from './Card';
+import { getActionLabel } from '../../hooks/useSettings';
 
 const SWIPE_MIN_DISTANCE = 120;
 // Angle zones (0° = right, 90° = up, 180° = left)
@@ -14,7 +15,7 @@ function swipeAngle(px, py) {
 }
 
 
-const SwipeableCard = forwardRef(function SwipeableCard({ email, onSwipe, onOpenDetail, onUnsubscribe, dragEnabled = true }, ref) {
+const SwipeableCard = forwardRef(function SwipeableCard({ email, onSwipe, onOpenDetail, onUnsubscribe, dragEnabled = true, settings }, ref) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const rotate = useTransform(x, [-300, 300], [-15, 15]);
@@ -49,8 +50,6 @@ const SwipeableCard = forwardRef(function SwipeableCard({ email, onSwipe, onOpen
     if (swiped.current) return;
     swiped.current = true;
 
-    const action = direction === 'right' ? 'keep' : direction === 'left' ? 'trash' : 'archive';
-
     const exitX = direction === 'right' ? 600 : direction === 'left' ? -600 : 0;
     const exitY = direction === 'up' ? -600 : 0;
 
@@ -58,7 +57,7 @@ const SwipeableCard = forwardRef(function SwipeableCard({ email, onSwipe, onOpen
     animate(y, exitY, { type: 'spring', velocity: velocityY, stiffness: 80, damping: 20 });
 
     // Remove from list quickly — card is already flying off the visible area
-    setTimeout(() => onSwipe(email, action), 150);
+    setTimeout(() => onSwipe(email, direction), 150);
   }, [email, onSwipe, x, y]);
 
   // Spring back to center
@@ -132,49 +131,40 @@ const SwipeableCard = forwardRef(function SwipeableCard({ email, onSwipe, onOpen
     >
       <Card email={email} isTop={true} onUnsubscribe={onUnsubscribe} />
 
-      {/* KEEP — green */}
+      {/* Right swipe overlay */}
       <motion.div
         className="absolute inset-0 flex items-center justify-center pointer-events-none"
-        style={{ opacity: keepOpacity, backgroundColor: 'rgba(22,163,74,0.85)' }}
+        style={{ opacity: keepOpacity, backgroundColor: `${settings.swipeActions.right.color}dd` }}
       >
-        <span
-          className="font-mono font-black text-5xl tracking-tighter uppercase"
-          style={{ color: '#faf9f6', transform: 'rotate(-12deg)' }}
-        >
-          KEEP
+        <span className="font-mono font-black text-5xl tracking-tighter uppercase" style={{ color: '#faf9f6', transform: 'rotate(-12deg)' }}>
+          {getActionLabel(settings.swipeActions.right)}
         </span>
       </motion.div>
 
-      {/* TRASH — red */}
+      {/* Left swipe overlay */}
       <motion.div
         className="absolute inset-0 flex items-center justify-center pointer-events-none"
-        style={{ opacity: trashOpacity, backgroundColor: 'rgba(255,0,0,0.85)' }}
+        style={{ opacity: trashOpacity, backgroundColor: `${settings.swipeActions.left.color}dd` }}
       >
-        <span
-          className="font-mono font-black text-5xl tracking-tighter uppercase"
-          style={{ color: '#faf9f6', transform: 'rotate(-12deg)' }}
-        >
-          TRASH
+        <span className="font-mono font-black text-5xl tracking-tighter uppercase" style={{ color: '#faf9f6', transform: 'rotate(-12deg)' }}>
+          {getActionLabel(settings.swipeActions.left)}
         </span>
       </motion.div>
 
-      {/* ARCHIVE — blue */}
+      {/* Up swipe overlay */}
       <motion.div
         className="absolute inset-0 flex items-center justify-center pointer-events-none"
-        style={{ opacity: archiveOpacity, backgroundColor: 'rgba(37,99,235,0.85)' }}
+        style={{ opacity: archiveOpacity, backgroundColor: `${settings.swipeActions.up.color}dd` }}
       >
-        <span
-          className="font-mono font-black text-5xl tracking-tighter uppercase"
-          style={{ color: '#faf9f6', transform: 'rotate(-12deg)' }}
-        >
-          ARCHIVE
+        <span className="font-mono font-black text-5xl tracking-tighter uppercase" style={{ color: '#faf9f6', transform: 'rotate(-12deg)' }}>
+          {getActionLabel(settings.swipeActions.up)}
         </span>
       </motion.div>
     </motion.div>
   );
 });
 
-export default function CardStack({ emails, onSwipe, onOpenDetail, onUnsubscribe, stats, fetchError, onRetry, dragEnabled = true }) {
+export default function CardStack({ emails, onSwipe, onOpenDetail, onUnsubscribe, stats, fetchError, onRetry, dragEnabled = true, settings }) {
 
   if (!emails || emails.length === 0) {
     // Fetch error state
@@ -264,18 +254,18 @@ export default function CardStack({ emails, onSwipe, onOpenDetail, onUnsubscribe
               transition={{ delay: 0.7 }}
             >
               <div className="flex items-center gap-1.5 px-3 py-2">
-                <div className="w-2 h-2 bg-[#16a34a]" />
-                <span className="text-xs font-black tabular-nums">{stats.kept || 0}</span>
+                <div className="w-2 h-2" style={{ backgroundColor: settings.swipeActions.left.color }} />
+                <span className="text-xs font-black tabular-nums">{stats.left || 0}</span>
               </div>
               <div className="border-l-[2px] border-black/15" />
               <div className="flex items-center gap-1.5 px-3 py-2">
-                <div className="w-2 h-2 bg-[#2563eb]" />
-                <span className="text-xs font-black tabular-nums">{stats.archived || 0}</span>
+                <div className="w-2 h-2" style={{ backgroundColor: settings.swipeActions.up.color }} />
+                <span className="text-xs font-black tabular-nums">{stats.up || 0}</span>
               </div>
               <div className="border-l-[2px] border-black/15" />
               <div className="flex items-center gap-1.5 px-3 py-2">
-                <div className="w-2 h-2 bg-[#ff0000]" />
-                <span className="text-xs font-black tabular-nums">{stats.trashed || 0}</span>
+                <div className="w-2 h-2" style={{ backgroundColor: settings.swipeActions.right.color }} />
+                <span className="text-xs font-black tabular-nums">{stats.right || 0}</span>
               </div>
             </motion.div>
           )}
@@ -313,6 +303,7 @@ export default function CardStack({ emails, onSwipe, onOpenDetail, onUnsubscribe
         onOpenDetail={onOpenDetail}
         onUnsubscribe={onUnsubscribe}
         dragEnabled={dragEnabled}
+        settings={settings}
       />
     </div>
   );
