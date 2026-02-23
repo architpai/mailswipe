@@ -1,4 +1,5 @@
 import React from 'react';
+import { Settings as SettingsIcon } from 'lucide-react';
 
 // Segmented progress bar — Casio bit-display style
 // Fills in discrete blocks instead of a smooth bar
@@ -65,7 +66,7 @@ function SignalLight({ mlStatus }) {
   return <div className="w-3 h-3 bg-[#ff0000]" />;
 }
 
-export default function TopNav({ userProfile, onLogout, mlStatus, mlProgress }) {
+export default function TopNav({ userProfile, onLogout, mlStatus, mlProgress, onOpenSettings }) {
   const renderMlBadge = () => {
     if (mlStatus === 'loading') {
       return (
@@ -107,6 +108,16 @@ export default function TopNav({ userProfile, onLogout, mlStatus, mlProgress }) 
 
       <div className="flex items-center gap-4">
         {renderMlBadge()}
+
+        {userProfile && (
+          <button
+            onClick={onOpenSettings}
+            className="text-black hover:text-[#ff0000] transition-colors bg-transparent border-none cursor-pointer p-0"
+            title="Settings"
+          >
+            <SettingsIcon size={16} strokeWidth={2.5} />
+          </button>
+        )}
 
         {userProfile ? (
           <div className="flex items-center gap-3">
