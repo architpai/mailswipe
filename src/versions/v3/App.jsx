@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import TopNav from './TopNav';
 import Sidebar from './Sidebar';
@@ -347,9 +347,12 @@ function App() {
   const emailsRef = useRef(emails);
   emailsRef.current = emails;
 
-  // Predict swipe action for the top email
+  // Predict swipe action for the top email (recomputes only when top email changes)
   const topEmail = emails.length > 0 ? emails[0] : null;
-  const predictions = topEmail ? predict(topEmail) : null;
+  const predictions = useMemo(
+    () => (topEmail ? predict(topEmail) : null),
+    [topEmail, predict]
+  );
 
   // Only trigger ML analysis when new emails arrive (length changes), not on every re-render
   useEffect(() => {
@@ -363,6 +366,7 @@ function App() {
     const actionConfig = settings.swipeActions[direction];
     handleAction(email, direction, actionConfig);
     setLastAction({ email, direction, actionConfig });
+    // Note: undo does not reverse training — a single reversed sample has diminishing impact
     train(email, direction);
   };
 
