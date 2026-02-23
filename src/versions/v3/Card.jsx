@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { getActionLabel } from '../../hooks/useSettings';
 
 // Tag with loading spinner + twang animation when generation completes
 function MlTagBadge({ mlTag }) {
@@ -93,17 +94,8 @@ function PredictionPills({ predictions, settings, modelReady }) {
     (predictions[a] || 0) > (predictions[b] || 0) ? a : b
   );
 
-  // Build abbreviated label (first 3 chars uppercase)
-  const getAbbrev = (actionConfig) => {
-    let name;
-    if (actionConfig.type === 'label') {
-      name = actionConfig.labelName || 'Label';
-    } else {
-      const labels = { trash: 'Trash', archive: 'Archive', star: 'Star', read: 'Read', spam: 'Spam' };
-      name = labels[actionConfig.type] || actionConfig.type;
-    }
-    return name.substring(0, 3).toUpperCase();
-  };
+  const getAbbrev = (actionConfig) =>
+    getActionLabel(actionConfig).substring(0, 3).toUpperCase();
 
   return (
     <div className="flex items-center gap-1.5 mb-3">
