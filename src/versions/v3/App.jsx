@@ -53,6 +53,34 @@ const DEMO_STEPS = [
     labelColor: '#2563eb',
     callout: 'SAVE FOR LATER. INSTANTLY.',
   },
+  {
+    from: 'DEALS@MEGASTORE.COM',
+    subject: 'FLASH SALE 80% OFF',
+    snippet: 'UNBELIEVABLE DEALS ON ELECTRONICS, FASHION AND MORE...',
+    tag: 'SPAM',
+    direction: 'left',
+    exitX: -600,
+    exitY: 0,
+    exitRotate: -18,
+    label: '← TRASH',
+    labelColor: '#ff0000',
+    callout: 'LEARNS AS YOU SWIPE.',
+    tintColor: 'rgba(220, 38, 38, 0.10)',
+  },
+  {
+    from: 'ALEX',
+    subject: 'PARTY THIS SATURDAY!',
+    snippet: 'HEY! THROWING A PARTY AT MY PLACE THIS WEEKEND. YOU IN?',
+    tag: 'PERSONAL',
+    direction: 'right',
+    exitX: 600,
+    exitY: 0,
+    exitRotate: 18,
+    label: 'KEEP →',
+    labelColor: '#16a34a',
+    callout: 'SUGGESTS ACTIONS. YOU STAY IN CONTROL.',
+    tintColor: 'rgba(22, 163, 74, 0.10)',
+  },
 ];
 
 const PAUSE_STEP = {
@@ -66,8 +94,8 @@ const PAUSE_STEP = {
 function DemoCard({ step, isSwiping }) {
   return (
     <motion.div
-      className="absolute w-[280px] sm:w-[320px] border-[3px] border-black bg-white p-5 select-none"
-      style={{ fontFamily: 'monospace' }}
+      className="absolute w-[280px] sm:w-[320px] border-[3px] border-black p-5 select-none"
+      style={{ fontFamily: 'monospace', backgroundColor: step.tintColor || '#ffffff' }}
       initial={{ x: 0, y: 30, rotate: 0, opacity: 0, scale: 0.95 }}
       animate={{ x: 0, y: 0, rotate: 0, opacity: 1, scale: 1 }}
       exit={{
