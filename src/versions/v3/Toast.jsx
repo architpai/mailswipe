@@ -19,7 +19,7 @@ export default function Toast({ lastAction, onUndo, onDismiss }) {
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 50 }}
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-black text-white px-4 py-3 rounded-none shadow-none border-none flex items-center justify-between gap-4 w-11/12 max-w-sm font-mono"
+          className="fixed bottom-20 sm:bottom-6 left-1/2 -translate-x-1/2 z-50 bg-black text-white px-4 py-3 rounded-none shadow-none border-none flex items-center justify-between gap-4 w-11/12 max-w-sm font-mono"
         >
           <span className="font-bold text-xs uppercase tracking-tight">
             EMAIL {getActionPastTense(lastAction.actionConfig)}
