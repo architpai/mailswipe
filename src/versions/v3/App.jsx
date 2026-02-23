@@ -65,7 +65,7 @@ const DEMO_STEPS = [
     label: '← TRASH',
     labelColor: '#ff0000',
     callout: 'LEARNS AS YOU SWIPE.',
-    tintColor: 'rgba(220, 38, 38, 0.10)',
+    tintColor: 'rgb(251, 233, 233)',
   },
   {
     from: 'ALEX',
@@ -79,7 +79,7 @@ const DEMO_STEPS = [
     label: 'KEEP →',
     labelColor: '#16a34a',
     callout: 'SUGGESTS ACTIONS. YOU STAY IN CONTROL.',
-    tintColor: 'rgba(22, 163, 74, 0.10)',
+    tintColor: 'rgb(232, 249, 238)',
   },
 ];
 

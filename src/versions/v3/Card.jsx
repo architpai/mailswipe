@@ -137,6 +137,18 @@ function PredictionPills({ predictions, settings, modelReady }) {
 const CONFIDENCE_THRESHOLD = 0.8;
 const MAX_TINT_OPACITY = 0.12;
 
+// Blend a hex color with white at a given opacity, returning an opaque hex color.
+// This avoids transparency which would show stacked cards behind.
+function blendWithWhite(hex, opacity) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const blendR = Math.round(r * opacity + 255 * (1 - opacity));
+  const blendG = Math.round(g * opacity + 255 * (1 - opacity));
+  const blendB = Math.round(b * opacity + 255 * (1 - opacity));
+  return `rgb(${blendR}, ${blendG}, ${blendB})`;
+}
+
 function computeTintColor(predictions, settings) {
   if (!predictions || !settings) return null;
   const directions = ['left', 'up', 'right'];
@@ -152,7 +164,7 @@ function computeTintColor(predictions, settings) {
   if (maxConf < CONFIDENCE_THRESHOLD) return null;
   const opacity = ((maxConf - CONFIDENCE_THRESHOLD) / (1 - CONFIDENCE_THRESHOLD)) * MAX_TINT_OPACITY;
   const color = settings.swipeActions[maxDir].color;
-  return color + Math.round(opacity * 255).toString(16).padStart(2, '0');
+  return blendWithWhite(color, opacity);
 }
 
 export default function Card({ email, isTop, onUnsubscribe, predictions, settings, modelReady }) {
