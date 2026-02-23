@@ -237,7 +237,6 @@ export default function Settings({ settings, onSave, onReset, onClose }) {
 
   const handleReset = () => {
     setDraft(JSON.parse(JSON.stringify(DEFAULT_SETTINGS.swipeActions)));
-    onReset();
     setError('');
   };
 
