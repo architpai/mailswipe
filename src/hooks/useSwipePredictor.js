@@ -157,7 +157,10 @@ function softmax(logits) {
 // ── Hook ─────────────────────────────────────────────────────────────
 
 export function useSwipePredictor() {
-  const modelRef = useRef(loadModel());
+  const modelRef = useRef(null);
+  if (modelRef.current === null) {
+    modelRef.current = loadModel();
+  }
   const [swipeCount, setSwipeCount] = useState(modelRef.current.swipeCount);
 
   const predict = useCallback((email) => {
@@ -193,6 +196,10 @@ export function useSwipePredictor() {
   }, []);
 
   const train = useCallback((email, direction) => {
+    if (!DIRECTIONS.includes(direction)) {
+      console.warn(`useSwipePredictor.train: unknown direction "${direction}"`);
+      return;
+    }
     const model = modelRef.current;
 
     const tokens = extractFeatureTokens(email);
