@@ -47,11 +47,14 @@ export default function DetailView({ email, onClose, onAction, onUnsubscribe, se
       .catch(console.error)
       .finally(() => setIsLoading(false));
 
-    const handleEsc = (e) => {
-      if (e.key === 'Escape') onClose();
+    const handleKey = (e) => {
+      if (e.key === 'Escape' || e.key === ' ') {
+        e.preventDefault();
+        onClose();
+      }
     };
-    window.addEventListener('keydown', handleEsc);
-    return () => window.removeEventListener('keydown', handleEsc);
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
   }, [email, onClose]);
 
   if (!email) return null;
