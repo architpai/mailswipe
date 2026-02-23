@@ -5,9 +5,11 @@ import Sidebar from './Sidebar';
 import CardStack from './CardStack';
 import DetailView from './DetailView';
 import Toast from './Toast';
+import Settings from './Settings';
 import { useAuth } from '../../hooks/useAuth';
 import { useEmails } from '../../hooks/useEmails';
 import { useML } from '../../hooks/useML';
+import { useSettings } from '../../hooks/useSettings';
 
 // ── Demo sequence for landing page ──────────────────────────────────
 const DEMO_STEPS = [
@@ -335,6 +337,8 @@ function App() {
   const { token, userProfile, login, logout } = useAuth();
   const { emails, setEmails, handleAction, undoAction, stats, isLoading, fetchError, loadMore } = useEmails(token);
   const { isReady, mlStatus, mlProgress, analyzeEmails } = useML();
+  const { settings, updateSettings, resetSettings } = useSettings();
+  const [showSettings, setShowSettings] = useState(false);
 
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [lastAction, setLastAction] = useState(null);
@@ -349,13 +353,16 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [emails.length, isReady]);
 
-  const handleSwipe = (email, action) => {
-    handleAction(email, action);
-    setLastAction({ email, action });
+  const handleSwipe = (email, direction) => {
+    const actionConfig = settings.swipeActions[direction];
+    handleAction(email, direction, actionConfig);
+    setLastAction({ email, direction, actionConfig });
   };
 
-  const handleActionDetail = (email, action) => {
-    handleAction(email, action);
+  const handleActionDetail = (email, direction) => {
+    const actionConfig = settings.swipeActions[direction];
+    handleAction(email, direction, actionConfig);
+    setLastAction({ email, direction, actionConfig });
     setSelectedEmail(null);
   };
 
@@ -365,7 +372,9 @@ function App() {
     } else {
       alert('Mailto unsubscribe not fully implemented yet.');
     }
-    handleActionDetail(email, 'trash');
+    const trashDir = Object.entries(settings.swipeActions).find(([_, cfg]) => cfg.type === 'trash')?.[0] || 'left';
+    const actionConfig = settings.swipeActions[trashDir];
+    handleAction(email, trashDir, actionConfig);
   };
 
   // Login Screen
@@ -376,10 +385,10 @@ function App() {
   // Authenticated View
   return (
     <div className="w-full h-full flex flex-col bg-white relative overflow-hidden font-mono">
-      <TopNav userProfile={userProfile} onLogout={logout} mlStatus={mlStatus} mlProgress={mlProgress} />
+      <TopNav userProfile={userProfile} onLogout={logout} mlStatus={mlStatus} mlProgress={mlProgress} onOpenSettings={() => setShowSettings(true)} />
 
       <div className="flex-1 flex flex-col items-center p-4 pt-6 overflow-hidden relative z-10 max-w-md mx-auto w-full">
-        <Sidebar stats={stats} />
+        <Sidebar stats={stats} settings={settings} />
 
         <div className="flex-1 w-full flex items-center justify-center relative">
           {isLoading && emails.length === 0 ? (
@@ -397,6 +406,7 @@ function App() {
               fetchError={fetchError}
               onRetry={loadMore}
               dragEnabled={!selectedEmail}
+              settings={settings}
             />
           )}
         </div>
@@ -408,14 +418,26 @@ function App() {
           onClose={() => setSelectedEmail(null)}
           onAction={handleActionDetail}
           onUnsubscribe={handleUnsubscribe}
+          settings={settings}
         />
       )}
 
       <Toast
         lastAction={lastAction}
-        onUndo={({ email, action }) => undoAction(email, action)}
+        onUndo={({ email, direction, actionConfig }) => undoAction(email, direction, actionConfig)}
         onDismiss={() => setLastAction(null)}
       />
+
+      <AnimatePresence>
+        {showSettings && (
+          <Settings
+            settings={settings}
+            onSave={updateSettings}
+            onReset={resetSettings}
+            onClose={() => setShowSettings(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
