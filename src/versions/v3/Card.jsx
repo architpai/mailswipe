@@ -135,7 +135,7 @@ function PredictionPills({ predictions, settings, modelReady }) {
 }
 
 const CONFIDENCE_THRESHOLD = 0.8;
-const MAX_TINT_OPACITY = 0.06;
+const MAX_TINT_OPACITY = 0.25;
 
 // Blend a hex color with white at a given opacity, returning an opaque hex color.
 // This avoids transparency which would show stacked cards behind.
