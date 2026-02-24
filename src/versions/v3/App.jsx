@@ -232,7 +232,7 @@ function LandingPage({ onLogin }) {
 
   return (
     <div
-      className="w-full h-full flex flex-col bg-white overflow-hidden font-mono select-none"
+      className="w-full h-screen flex flex-col bg-white overflow-hidden font-mono select-none"
       style={{ fontFamily: 'monospace' }}
     >
       {/* ── Header ─────────────────────────────── */}
@@ -347,7 +347,7 @@ function LandingPage({ onLogin }) {
       </div>
 
       {/* ── Footer / Connect ───────────────────── */}
-      <div className="flex-none pb-8 sm:pb-10 px-6 flex flex-col items-center">
+      <div className="flex-none pb-8 sm:pb-10 px-6 flex flex-col items-center gap-4">
         <button
           onClick={onLogin}
           className="group relative text-sm font-black text-black uppercase tracking-tight cursor-pointer bg-transparent border-none p-0 font-mono"
@@ -357,6 +357,11 @@ function LandingPage({ onLogin }) {
           </span>
           <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-black group-hover:bg-[#ff0000] transition-colors duration-150" />
         </button>
+        <div className="flex gap-3 text-[9px] uppercase tracking-[0.15em] font-bold text-black/25">
+          <a href="#/privacy" className="hover:text-black/50 transition-colors">PRIVACY</a>
+          <span>&middot;</span>
+          <a href="#/terms" className="hover:text-black/50 transition-colors">TERMS</a>
+        </div>
       </div>
     </div>
   );
@@ -424,7 +429,7 @@ function App() {
 
   // Authenticated View
   return (
-    <div className="w-full h-full flex flex-col bg-white relative overflow-hidden font-mono">
+    <div className="w-full h-screen flex flex-col bg-white relative overflow-hidden font-mono">
       <TopNav userProfile={userProfile} onLogout={logout} mlStatus={mlStatus} mlProgress={mlProgress} onOpenSettings={() => setShowSettings(true)} />
 
       <div className="flex-1 flex flex-col items-center p-4 pt-6 overflow-hidden relative z-10 max-w-md mx-auto w-full">
